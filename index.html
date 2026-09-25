@@ -92,14 +92,12 @@
   .room-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
   .room-card h3 { margin: 0 0 2px; font-size: 15px; }
   .room-card .room-note { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
-  .workspace-block { padding: 8px 0; border-top: 1px solid var(--border); }
+  .workspace-block { padding: 10px 0; border-top: 1px solid var(--border); }
   .workspace-block:first-child { border-top: none; padding-top: 0; }
-  .workspace-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .ws-label { font-size: 13px; font-weight: 600; min-width: 62px; }
-  .ws-slots { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; justify-content: flex-end; }
-  .ws-full-row { margin-top: 6px; }
-  .full-day-btn { width: 100%; text-align: center; }
-  .slot-btn { border-radius: 9px; padding: 7px 10px; font-size: 11.5px; font-weight: 600; border: 1.5px solid; cursor: pointer; min-width: 64px; text-align: center; line-height: 1.25; }
+  .ws-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .ws-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .slot-btn { border-radius: 9px; padding: 9px 6px; font-size: 11.5px; font-weight: 600; border: 1.5px solid; cursor: pointer; text-align: center; line-height: 1.25; width: 100%; }
+  .slot-btn.full-span { grid-column: 1 / -1; }
   .slot-btn.free { background: var(--free); border-color: var(--free-border); color: var(--free-text); }
   .slot-btn.busy { background: var(--busy); border-color: var(--busy-border); color: var(--busy-text); cursor: default; }
   .slot-btn.permanent { background: var(--permanent); border-color: var(--permanent-border); color: var(--permanent-text); cursor: default; }
@@ -527,12 +525,11 @@
     return html;
   }
 
-  function partButtonHtml(room, ws, part, status) {
-    if (status.status === "free") {
+  function partButtonHtml(room, ws, part, isFree, unavailableNote) {
+    if (isFree) {
       return '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + '</button>';
     }
-    var owner = profileById(status.booking.user_id);
-    return '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(owner ? owner.full_name : "belegt") + '</small></div>';
+    return '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(unavailableNote || "belegt") + '</small></div>';
   }
 
   function renderBuchen() {
@@ -544,26 +541,21 @@
       html += '<div class="room-card"><h3>' + escapeHtml(room.label) + '</h3>';
       room.workspaces.forEach(function (ws) {
         var permState = workspacePermState(ws.id, dateISO);
-        html += '<div class="workspace-block"><div class="workspace-row"><div class="ws-label">' + escapeHtml(ws.label) + '</div><div class="ws-slots">';
+        html += '<div class="workspace-block"><div class="ws-label">' + escapeHtml(ws.label) + '</div><div class="ws-slots">';
         if (permState === "locked") {
           var owner = profileById(state.permanentAssignments[ws.id]);
-          html += '<div class="slot-btn permanent">Dauerhaft belegt<small>' + escapeHtml(owner ? owner.full_name : "?") + '</small></div>';
-          html += '</div></div>';
+          html += '<div class="slot-btn permanent full-span">Dauerhaft belegt<small>' + escapeHtml(owner ? owner.full_name : "?") + '</small></div>';
         } else {
           var amStatus = slotStatus(ws.id, dateISO, "AM");
           var pmStatus = slotStatus(ws.id, dateISO, "PM");
-          html += partButtonHtml(room, ws, "AM", amStatus);
-          html += partButtonHtml(room, ws, "PM", pmStatus);
-          html += '</div></div>';
+          var amOwner = amStatus.status === "busy" ? profileById(amStatus.booking.user_id) : null;
+          var pmOwner = pmStatus.status === "busy" ? profileById(pmStatus.booking.user_id) : null;
           var fullFree = amStatus.status === "free" && pmStatus.status === "free";
-          html += '<div class="ws-full-row">';
-          if (fullFree) {
-            html += '<button class="slot-btn free full-day-btn" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="FULL">Ganztags buchen</button>';
-          } else {
-            html += '<div class="slot-btn locked full-day-btn">Ganztags nicht verfügbar</div>';
-          }
-          html += '</div>';
+          html += partButtonHtml(room, ws, "AM", amStatus.status === "free", amOwner ? amOwner.full_name : null);
+          html += partButtonHtml(room, ws, "PM", pmStatus.status === "free", pmOwner ? pmOwner.full_name : null);
+          html += partButtonHtml(room, ws, "FULL", fullFree, "nicht verfügbar");
         }
+        html += '</div>';
         if (permState === "released") {
           var owner3 = profileById(state.permanentAssignments[ws.id]);
           html += '<div class="room-note">' + escapeHtml(owner3 ? owner3.full_name : "Stammnutzer:in") + ' hat heute Urlaub – Platz ist buchbar.</div>';
