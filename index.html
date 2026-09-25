@@ -141,10 +141,10 @@
   @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   .modal h3 { margin-top: 0; font-size: 16px; }
   .modal .modal-sub { color: var(--text-muted); font-size: 12.5px; margin-bottom: 14px; }
-  .part-options { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
-  .part-opt { border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 12px; font-size: 13.5px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); color: var(--text); }
-  .part-opt.disabled { opacity: 0.35; cursor: default; }
-  .part-opt.selected { border-color: var(--vak-blue); background: rgba(13,59,102,0.08); }
+  .confirm-summary { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 18px; }
+  .confirm-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13.5px; padding: 10px 12px; background: var(--bg); border-radius: 10px; }
+  .confirm-row span { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .confirm-row b { font-weight: 700; text-align: right; }
   .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
   .btn-secondary { flex: 1; background: var(--locked); color: var(--text); border: none; border-radius: 10px; padding: 11px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
 
@@ -185,6 +185,7 @@
   });
 
   var PART_LABEL = { AM: "Vormittag", PM: "Nachmittag", FULL: "Ganztags" };
+  var PART_TIME = { AM: "bis 12:00", PM: "ab 12:00", FULL: "ganztägig" };
   var WORKDAY_COUNT = 10;
 
   var state = {
@@ -310,20 +311,18 @@
 
   // ---------- booking actions ----------
 
-  function openBookingModal(room, workspace, dateISO, preselectPart) {
-    var amStatus = slotStatus(workspace.id, dateISO, "AM");
-    var pmStatus = slotStatus(workspace.id, dateISO, "PM");
-    state.modal = { type: "book", room: room, workspace: workspace, dateISO: dateISO, amFree: amStatus.status === "free", pmFree: pmStatus.status === "free", selectedPart: preselectPart || null };
+  function openBookingModal(room, workspace, dateISO, part) {
+    state.modal = { type: "book", room: room, workspace: workspace, dateISO: dateISO, part: part };
     render();
   }
   function closeModal() { state.modal = null; render(); }
 
   function confirmBooking() {
     var m = state.modal;
-    if (!m || !m.selectedPart) return;
+    if (!m) return;
     supabaseClient.from("bookings").insert({
       user_id: state.profile.id, room_number: m.room.number, workspace_id: m.workspace.id,
-      booking_date: m.dateISO, part: m.selectedPart
+      booking_date: m.dateISO, part: m.part
     }).then(function (res) {
       if (res.error) { showToast("Buchung fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
       showToast("Gebucht: " + m.room.label + " · " + m.workspace.label);
@@ -527,7 +526,7 @@
 
   function partButtonHtml(room, ws, part, isFree, unavailableNote) {
     if (isFree) {
-      return '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + '</button>';
+      return '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + '<small>' + PART_TIME[part] + '</small></button>';
     }
     return '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(unavailableNote || "belegt") + '</small></div>';
   }
@@ -670,17 +669,16 @@
   function renderModal() {
     var m = state.modal; if (!m || m.type !== "book") return "";
     var html = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">';
-    html += '<h3>' + escapeHtml(m.room.label) + ' · ' + escapeHtml(m.workspace.label) + '</h3>';
+    html += '<h3>Buchung bestätigen</h3>';
     var d = parseISO(m.dateISO);
-    html += '<div class="modal-sub">' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</div>';
-    html += '<div class="part-options">';
-    ["AM", "PM", "FULL"].forEach(function (part) {
-      var enabled = part === "FULL" ? (m.amFree && m.pmFree) : (part === "AM" ? m.amFree : m.pmFree);
-      var cls = "part-opt" + (enabled ? "" : " disabled") + (m.selectedPart === part ? " selected" : "");
-      html += '<button class="' + cls + '" data-part="' + part + '" ' + (enabled ? "" : "disabled") + '>' + PART_LABEL[part] + (enabled ? "" : " · belegt") + '</button>';
-    });
-    html += '</div><div class="modal-actions"><button class="btn-secondary" id="modalCancel">Abbrechen</button>';
-    html += '<button class="btn-primary" id="modalConfirm"' + (m.selectedPart ? "" : " disabled") + '>Buchen</button></div></div></div>';
+    var timeNote = { AM: "bis 12:00 Uhr", PM: "ab 12:00 Uhr", FULL: "ganzer Tag" }[m.part];
+    html += '<div class="confirm-summary">';
+    html += '<div class="confirm-row"><span>Arbeitsplatz</span><b>' + escapeHtml(m.room.label) + ' · ' + escapeHtml(m.workspace.label) + '</b></div>';
+    html += '<div class="confirm-row"><span>Datum</span><b>' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</b></div>';
+    html += '<div class="confirm-row"><span>Zeitraum</span><b>' + PART_LABEL[m.part] + ' (' + timeNote + ')</b></div>';
+    html += '</div>';
+    html += '<div class="modal-actions"><button class="btn-secondary" id="modalCancel">Abbrechen</button>';
+    html += '<button class="btn-primary" id="modalConfirm">Jetzt buchen</button></div></div></div>';
     return html;
   }
 
@@ -724,9 +722,6 @@
       backdrop.addEventListener("click", function (e) { if (e.target === backdrop) closeModal(); });
       document.getElementById("modalCancel").addEventListener("click", closeModal);
       document.getElementById("modalConfirm").addEventListener("click", confirmBooking);
-      document.querySelectorAll(".part-opt").forEach(function (btn) {
-        btn.addEventListener("click", function () { if (btn.disabled) return; state.modal.selectedPart = btn.getAttribute("data-part"); render(); });
-      });
     }
   }
 
