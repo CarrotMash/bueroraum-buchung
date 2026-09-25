@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VAK Büro-Buchung</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --vak-blue: #0d3b66;
+    --vak-blue-light: #14568f;
+    --bg: #f4f6f8;
+    --card-bg: #ffffff;
+    --text: #1c2733;
+    --text-muted: #5c6b7a;
+    --border: #e1e6ea;
+    --free: #d9f2df;
+    --free-border: #4caf7d;
+    --free-text: #1e6b42;
+    --busy: #fbdada;
+    --busy-border: #d97676;
+    --busy-text: #9c3b3b;
+    --permanent: #fff3cf;
+    --permanent-border: #e0b84a;
+    --permanent-text: #8a6d1a;
+    --locked: #e7e9ec;
+    --locked-border: #c3c9d0;
+    --locked-text: #6b7280;
+    --name-accent: #0d3b66;
+    --name-accent-bg: #eaf1f8;
+    --radius: 14px;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12171d; --card-bg: #1b232b; --text: #eef1f4; --text-muted: #9aa7b4; --border: #2b3540;
+      --free: #163826; --free-border: #3f9d6c; --free-text: #8fe0b3;
+      --busy: #3a1f22; --busy-border: #b25b5b; --busy-text: #f0a9a9;
+      --permanent: #3a2f10; --permanent-border: #c9a53a; --permanent-text: #f0d488;
+      --locked: #232b33; --locked-border: #3a4552; --locked-text: #8b97a3;
+      --name-accent: #8fc1ee; --name-accent-bg: #1f3348;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12171d; --card-bg: #1b232b; --text: #eef1f4; --text-muted: #9aa7b4; --border: #2b3540;
+    --free: #163826; --free-border: #3f9d6c; --free-text: #8fe0b3;
+    --busy: #3a1f22; --busy-border: #b25b5b; --busy-text: #f0a9a9;
+    --permanent: #3a2f10; --permanent-border: #c9a53a; --permanent-text: #f0d488;
+    --locked: #232b33; --locked-border: #3a4552; --locked-text: #8b97a3;
+    --name-accent: #8fc1ee; --name-accent-bg: #1f3348;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app { min-height: 100%; display: flex; flex-direction: column; }
+
+  header.topbar {
+    background: linear-gradient(135deg, var(--vak-blue) 0%, var(--vak-blue-light) 100%);
+    color: #fff; padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 14px; position: sticky; top: 0; z-index: 10;
+  }
+  .topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .logo-badge { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .brand-text { line-height: 1.15; }
+  .brand-text .title { font-weight: 700; font-size: 15.5px; }
+  .brand-text .subtitle { font-size: 11.5px; opacity: 0.85; }
+  .user-chip { font-size: 12.5px; background: rgba(255,255,255,0.16); padding: 6px 10px; border-radius: 20px; display: flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 46vw; overflow: hidden; }
+  .user-chip span.uname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .user-chip button { background: none; border: none; color: #fff; opacity: 0.75; font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline; flex-shrink: 0; }
+
+  nav.tabs { display: flex; gap: 6px; margin-top: 14px; background: rgba(255,255,255,0.14); padding: 4px; border-radius: 12px; }
+  nav.tabs button { flex: 1; border: none; background: transparent; color: #fff; opacity: 0.75; padding: 9px 6px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  nav.tabs button.active { background: #fff; color: var(--vak-blue); opacity: 1; }
+
+  main { flex: 1; padding: 16px 16px 90px; max-width: 640px; margin: 0 auto; width: 100%; }
+
+  .date-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; margin-bottom: 12px; -webkit-overflow-scrolling: touch; }
+  .date-chip { flex: 0 0 auto; border: 1px solid var(--border); background: var(--card-bg); color: var(--text); border-radius: 12px; padding: 8px 12px; font-size: 12.5px; cursor: pointer; text-align: center; min-width: 58px; }
+  .date-chip .dow { display: block; font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; }
+  .date-chip .dom { display: block; font-weight: 700; font-size: 15px; margin-top: 2px; }
+  .date-chip.active { background: var(--vak-blue); border-color: var(--vak-blue); color: #fff; }
+  .date-chip.active .dow { color: #cfe0ee; }
+
+  .room-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+  .room-card h3 { margin: 0 0 2px; font-size: 15px; }
+  .room-card .room-note { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
+  .workspace-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+  .workspace-row:first-of-type { border-top: none; }
+  .ws-label { font-size: 13px; font-weight: 600; min-width: 62px; }
+  .ws-slots { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; justify-content: flex-end; }
+  .slot-btn { border-radius: 9px; padding: 7px 10px; font-size: 11.5px; font-weight: 600; border: 1.5px solid; cursor: pointer; min-width: 64px; text-align: center; line-height: 1.25; }
+  .slot-btn.free { background: var(--free); border-color: var(--free-border); color: var(--free-text); }
+  .slot-btn.busy { background: var(--busy); border-color: var(--busy-border); color: var(--busy-text); cursor: default; }
+  .slot-btn.permanent { background: var(--permanent); border-color: var(--permanent-border); color: var(--permanent-text); cursor: default; }
+  .slot-btn.locked { background: var(--locked); border-color: var(--locked-border); color: var(--locked-text); cursor: default; }
+  .slot-btn small { display: block; font-weight: 400; font-size: 10px; opacity: 0.85; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--text-muted); margin: 4px 0 16px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card h3 { margin-top: 0; font-size: 15px; }
+
+  .booking-item, .vacation-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .booking-item:first-of-type, .vacation-item:first-of-type { border-top: none; }
+  .booking-main { font-size: 13.5px; font-weight: 600; }
+  .booking-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+  .btn-danger { border: none; background: var(--busy); color: var(--busy-text); border-radius: 8px; padding: 7px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .empty-state { color: var(--text-muted); font-size: 13px; text-align: center; padding: 26px 10px; }
+
+  .btn-primary { background: var(--vak-blue); color: #fff; border: none; border-radius: 10px; padding: 11px 16px; font-size: 13.5px; font-weight: 700; cursor: pointer; width: 100%; }
+  .btn-primary:disabled { opacity: 0.45; cursor: default; }
+  .btn-link { background: none; border: none; color: var(--vak-blue-light); font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 4px 0; }
+  select, input[type="date"], input[type="email"], input[type="password"], input[type="text"] {
+    width: 100%; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--card-bg); color: var(--text); font-size: 14px; margin-top: 6px;
+  }
+  label { font-size: 12.5px; color: var(--text-muted); font-weight: 600; }
+
+  .login-wrap { padding: 40px 22px; max-width: 420px; margin: 0 auto; text-align: left; }
+  .login-wrap .logo-big { width: 56px; height: 56px; border-radius: 16px; background: var(--vak-blue); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 14px; }
+  .login-wrap h2 { margin: 0 0 4px; font-size: 19px; color: var(--text); text-align: center; }
+  .login-wrap p.intro { color: var(--text-muted); font-size: 13.5px; margin-top: 4px; text-align: center; }
+  .auth-field { margin-bottom: 14px; }
+  .auth-error { background: var(--busy); color: var(--busy-text); border-radius: 9px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 14px; }
+  .auth-info { background: var(--free); color: var(--free-text); border-radius: 9px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 14px; }
+  .auth-switch { text-align: center; margin-top: 16px; font-size: 12.5px; color: var(--text-muted); }
+
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(10,15,20,0.45); display: flex; align-items: flex-end; justify-content: center; z-index: 50; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .modal { background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px)); animation: slideUp 0.18s ease-out; }
+  @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal h3 { margin-top: 0; font-size: 16px; }
+  .modal .modal-sub { color: var(--text-muted); font-size: 12.5px; margin-bottom: 14px; }
+  .part-options { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+  .part-opt { border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 12px; font-size: 13.5px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); color: var(--text); }
+  .part-opt.disabled { opacity: 0.35; cursor: default; }
+  .part-opt.selected { border-color: var(--vak-blue); background: rgba(13,59,102,0.08); }
+  .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+  .btn-secondary { flex: 1; background: var(--locked); color: var(--text); border: none; border-radius: 10px; padding: 11px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+
+  footer.app-footer { text-align: center; padding: 18px; font-size: 11px; color: var(--text-muted); }
+  footer.app-footer a { color: var(--text-muted); text-decoration: underline; cursor: pointer; }
+
+  .toast { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--vak-blue); color: #fff; padding: 10px 18px; border-radius: 30px; font-size: 12.5px; font-weight: 600; z-index: 60; box-shadow: 0 6px 18px rgba(0,0,0,0.18); max-width: 90vw; text-align: center; }
+  .banner { background: var(--permanent); border: 1px solid var(--permanent-border); color: var(--permanent-text); border-radius: 10px; padding: 10px 12px; font-size: 12px; margin-bottom: 14px; }
+  .admin-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--border); font-size: 12.5px; }
+  .admin-row:first-of-type { border-top: none; }
+</style>
+</head>
+<body>
+<div id="app"><div class="empty-state">Lädt…</div></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Supabase project config (public/anon key — safe to expose client-side; access is enforced by RLS) ----
+  var SUPABASE_URL = "https://iupkvjcaozhxjnrgfdpl.supabase.co";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1cGt2amNhb3poeGpucmdmZHBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzMjUzNDgsImV4cCI6MjEwNTkwMTM0OH0.F_lpwECNNULZ9dSFn5Li4cTSHU5okdU_0_kzBIFTO2g";
+
+  var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  var ROOMS = [
+    { number: "210", label: "Raum 210", permanent: true, workspaces: [{ id: "210-1", label: "Platz 1" }] },
+    { number: "211", label: "Raum 211", workspaces: [{ id: "211-1", label: "Platz 1" }] },
+    { number: "212", label: "Raum 212", workspaces: [{ id: "212-1", label: "Platz 1" }, { id: "212-2", label: "Platz 2" }] },
+    { number: "213", label: "Raum 213", workspaces: [{ id: "213-1", label: "Platz 1" }, { id: "213-2", label: "Platz 2" }] }
+  ];
+
+  var PART_LABEL = { AM: "Vormittag", PM: "Nachmittag", FULL: "Ganztags" };
+  var WORKDAY_COUNT = 10;
+
+  var state = {
+    session: null,
+    profile: null,          // own profile row { id, full_name, is_admin }
+    profiles: [],           // all profiles, for name lookups + admin dropdown
+    tab: "buchen",
+    selectedDate: null,
+    dates: [],
+    bookings: [],
+    vacations: [],
+    config: { permanent_user_210: null },
+    modal: null,
+    toastMsg: null,
+    authMode: "login",      // 'login' | 'register'
+    authError: null,
+    authInfo: null,
+    authBusy: false,
+    loadingData: false
+  };
+
+  function profileById(id) { for (var i = 0; i < state.profiles.length; i++) if (state.profiles[i].id === id) return state.profiles[i]; return null; }
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function fmtISO(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function parseISO(s) { var p = s.split("-"); return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)); }
+  var DOW = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  var MONTHS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+
+  function buildWorkdays(count) {
+    var out = []; var d = new Date(); d.setHours(0, 0, 0, 0);
+    while (out.length < count) {
+      var wd = d.getDay();
+      if (wd !== 0 && wd !== 6) out.push(new Date(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function showToast(msg) {
+    state.toastMsg = msg; render();
+    setTimeout(function () { state.toastMsg = null; render(); }, 2400);
+  }
+
+  // ---------- data access helpers ----------
+
+  function bookingsForDate(dateISO) { return state.bookings.filter(function (b) { return b.booking_date === dateISO; }); }
+
+  function slotStatus(workspaceId, dateISO, part) {
+    var list = bookingsForDate(dateISO).filter(function (b) { return b.workspace_id === workspaceId; });
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i];
+      if (b.part === "FULL" || b.part === part) return { status: "busy", booking: b };
+    }
+    return { status: "free", booking: null };
+  }
+
+  function room210State(dateISO) {
+    var ownerId = state.config.permanent_user_210;
+    if (!ownerId) return "unconfigured";
+    var onVacation = state.vacations.some(function (v) { return v.user_id === ownerId && v.vacation_date === dateISO; });
+    return onVacation ? "released" : "locked";
+  }
+
+  // ---------- auth ----------
+
+  function handleAuthSubmit(email, password, fullName) {
+    state.authError = null; state.authInfo = null;
+    if (!email || !password || (state.authMode === "register" && !fullName)) {
+      state.authError = "Bitte alle Felder ausfüllen."; render(); return;
+    }
+    state.authBusy = true; render();
+
+    if (state.authMode === "register") {
+      supabaseClient.auth.signUp({
+        email: email, password: password,
+        options: { data: { full_name: fullName } }
+      }).then(function (res) {
+        state.authBusy = false;
+        if (res.error) { state.authError = translateAuthError(res.error.message); render(); return; }
+        if (res.data.session) {
+          state.session = res.data.session;
+          afterLogin();
+        } else {
+          state.authMode = "login";
+          state.authInfo = "Konto angelegt. Bitte bestätige deine E-Mail-Adresse (falls gefordert) und melde dich dann an.";
+          render();
+        }
+      }).catch(function (e) { state.authBusy = false; state.authError = "Registrierung fehlgeschlagen."; render(); console.error(e); });
+    } else {
+      supabaseClient.auth.signInWithPassword({ email: email, password: password }).then(function (res) {
+        state.authBusy = false;
+        if (res.error) { state.authError = translateAuthError(res.error.message); render(); return; }
+        state.session = res.data.session;
+        afterLogin();
+      }).catch(function (e) { state.authBusy = false; state.authError = "Anmeldung fehlgeschlagen."; render(); console.error(e); });
+    }
+  }
+
+  function translateAuthError(msg) {
+    if (!msg) return "Unbekannter Fehler.";
+    if (/invalid login credentials/i.test(msg)) return "E-Mail oder Passwort ist falsch.";
+    if (/already registered|already exists/i.test(msg)) return "Für diese E-Mail existiert bereits ein Konto.";
+    if (/password.*(least|6|characters)/i.test(msg)) return "Das Passwort muss mindestens 6 Zeichen haben.";
+    if (/email.*confirm/i.test(msg)) return "Bitte bestätige zuerst deine E-Mail-Adresse.";
+    return msg;
+  }
+
+  function signOut() {
+    supabaseClient.auth.signOut().then(function () {
+      state.session = null; state.profile = null; state.tab = "buchen"; render();
+    });
+  }
+
+  function afterLogin() {
+    loadAllData(true);
+  }
+
+  // ---------- booking actions ----------
+
+  function openBookingModal(room, workspace, dateISO) {
+    var amStatus = slotStatus(workspace.id, dateISO, "AM");
+    var pmStatus = slotStatus(workspace.id, dateISO, "PM");
+    state.modal = { type: "book", room: room, workspace: workspace, dateISO: dateISO, amFree: amStatus.status === "free", pmFree: pmStatus.status === "free", selectedPart: null };
+    render();
+  }
+  function closeModal() { state.modal = null; render(); }
+
+  function confirmBooking() {
+    var m = state.modal;
+    if (!m || !m.selectedPart) return;
+    supabaseClient.from("bookings").insert({
+      user_id: state.profile.id, room_number: m.room.number, workspace_id: m.workspace.id,
+      booking_date: m.dateISO, part: m.selectedPart
+    }).then(function (res) {
+      if (res.error) { showToast("Buchung fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      showToast("Gebucht: " + m.room.label + " · " + m.workspace.label);
+      closeModal();
+      loadBookings();
+    });
+  }
+
+  function cancelBooking(id) {
+    supabaseClient.from("bookings").delete().eq("id", id).then(function (res) {
+      if (res.error) { showToast("Stornieren fehlgeschlagen."); console.error(res.error); return; }
+      showToast("Buchung storniert."); loadBookings();
+    });
+  }
+
+  function addVacation(dateISO) {
+    var exists = state.vacations.some(function (v) { return v.user_id === state.profile.id && v.vacation_date === dateISO; });
+    if (exists) { showToast("Bereits eingetragen."); return; }
+    supabaseClient.from("vacations").insert({ user_id: state.profile.id, vacation_date: dateISO }).then(function (res) {
+      if (res.error) { showToast("Eintragen fehlgeschlagen."); console.error(res.error); return; }
+      showToast("Urlaubstag eingetragen."); loadVacations();
+    });
+  }
+
+  function removeVacation(id) {
+    supabaseClient.from("vacations").delete().eq("id", id).then(function (res) {
+      if (res.error) { showToast("Entfernen fehlgeschlagen."); console.error(res.error); return; }
+      loadVacations();
+    });
+  }
+
+  function savePermanentUser(userId) {
+    supabaseClient.from("app_config").update({ permanent_user_210: userId || null }).eq("id", 1).then(function (res) {
+      if (res.error) { showToast("Speichern fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      showToast("Gespeichert."); loadConfig();
+    });
+  }
+
+  // ---------- data loading ----------
+
+  function loadProfiles() {
+    return supabaseClient.from("profiles").select("id, full_name, is_admin").then(function (res) {
+      if (!res.error) state.profiles = res.data || [];
+    });
+  }
+  function loadBookings() {
+    return supabaseClient.from("bookings").select("id, user_id, room_number, workspace_id, booking_date, part")
+      .gte("booking_date", fmtISO(new Date(Date.now() - 86400000)))
+      .then(function (res) { if (!res.error) state.bookings = res.data || []; render(); });
+  }
+  function loadVacations() {
+    return supabaseClient.from("vacations").select("id, user_id, vacation_date").then(function (res) {
+      if (!res.error) state.vacations = res.data || []; render();
+    });
+  }
+  function loadConfig() {
+    return supabaseClient.from("app_config").select("permanent_user_210").eq("id", 1).single().then(function (res) {
+      if (!res.error && res.data) state.config = res.data; render();
+    });
+  }
+
+  function loadAllData(afterAuth) {
+    state.loadingData = true;
+    render();
+    Promise.all([loadProfiles(), loadBookings(), loadVacations(), loadConfig()]).then(function () {
+      state.profile = profileById(state.session.user.id);
+      if (!state.profile) {
+        // profile row may not exist yet (trigger race right after signup) — retry once shortly
+        setTimeout(function () {
+          loadProfiles().then(function () {
+            state.profile = profileById(state.session.user.id);
+            state.loadingData = false;
+            render();
+          });
+        }, 1200);
+      } else {
+        state.loadingData = false;
+        render();
+      }
+    });
+  }
+
+  // ---------- rendering ----------
+
+  function render() {
+    var app = document.getElementById("app");
+    if (!state.session) { app.innerHTML = renderLogin(); bindLogin(); return; }
+    if (state.loadingData && !state.profile) { app.innerHTML = '<div class="empty-state">Lädt…</div>'; return; }
+    app.innerHTML = renderShell();
+    bindShell();
+  }
+
+  function renderLogin() {
+    var isRegister = state.authMode === "register";
+    var html = '<div class="login-wrap">';
+    html += '<div class="logo-big">🏢</div>';
+    html += '<h2>VAK Büro-Buchung</h2>';
+    html += '<p class="intro">' + (isRegister ? "Neues Konto anlegen" : "Bitte anmelden, um Arbeitsplätze zu buchen.") + '</p>';
+    if (state.authError) html += '<div class="auth-error">' + escapeHtml(state.authError) + '</div>';
+    if (state.authInfo) html += '<div class="auth-info">' + escapeHtml(state.authInfo) + '</div>';
+    html += '<form id="authForm">';
+    if (isRegister) {
+      html += '<div class="auth-field"><label for="fullName">Name</label><input type="text" id="fullName" autocomplete="name" placeholder="Vorname Nachname"></div>';
+    }
+    html += '<div class="auth-field"><label for="authEmail">E-Mail</label><input type="email" id="authEmail" autocomplete="email" placeholder="name@beispiel.de"></div>';
+    html += '<div class="auth-field"><label for="authPassword">Passwort</label><input type="password" id="authPassword" autocomplete="' + (isRegister ? "new-password" : "current-password") + '" placeholder="mind. 6 Zeichen"></div>';
+    html += '<button type="submit" class="btn-primary"' + (state.authBusy ? " disabled" : "") + '>' + (state.authBusy ? "Bitte warten…" : (isRegister ? "Konto erstellen" : "Anmelden")) + '</button>';
+    html += '</form>';
+    html += '<div class="auth-switch">';
+    html += isRegister ? 'Schon registriert? <button class="btn-link" id="switchAuth">Zur Anmeldung</button>' : 'Noch kein Konto? <button class="btn-link" id="switchAuth">Konto erstellen</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function bindLogin() {
+    var form = document.getElementById("authForm");
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = document.getElementById("authEmail").value.trim();
+      var password = document.getElementById("authPassword").value;
+      var fullNameEl = document.getElementById("fullName");
+      var fullName = fullNameEl ? fullNameEl.value.trim() : null;
+      handleAuthSubmit(email, password, fullName);
+    });
+    document.getElementById("switchAuth").addEventListener("click", function () {
+      state.authMode = state.authMode === "register" ? "login" : "register";
+      state.authError = null; state.authInfo = null;
+      render();
+    });
+  }
+
+  function renderShell() {
+    var user = state.profile;
+    var html = '<header class="topbar">';
+    html += '<div class="topbar-row">';
+    html += '<div class="brand"><div class="logo-badge">🏢</div><div class="brand-text"><div class="title">Büro-Buchung</div><div class="subtitle">VAK Schleswig-Holstein</div></div></div>';
+    html += '<div class="user-chip"><span class="uname">' + escapeHtml(user ? user.full_name : "") + '</span><button id="logoutBtn">abmelden</button></div>';
+    html += '</div>';
+    html += '<nav class="tabs">';
+    html += '<button data-tab="buchen" class="' + (state.tab === "buchen" ? "active" : "") + '">Buchen</button>';
+    html += '<button data-tab="meine" class="' + (state.tab === "meine" ? "active" : "") + '">Meine Buchungen</button>';
+    html += '<button data-tab="urlaub" class="' + (state.tab === "urlaub" ? "active" : "") + '">Urlaub</button>';
+    html += '</nav></header>';
+    html += '<main>';
+    if (state.tab === "buchen") html += renderBuchen();
+    else if (state.tab === "meine") html += renderMeine();
+    else if (state.tab === "urlaub") html += renderUrlaub();
+    else if (state.tab === "admin") html += renderAdmin();
+    html += '</main>';
+    html += '<footer class="app-footer"><a id="adminLink">Systemverwaltung</a></footer>';
+    if (state.modal) html += renderModal();
+    if (state.toastMsg) html += '<div class="toast">' + escapeHtml(state.toastMsg) + '</div>';
+    return html;
+  }
+
+  function renderDateScroll() {
+    var html = '<div class="date-scroll">';
+    state.dates.forEach(function (d) {
+      var iso = fmtISO(d); var active = iso === state.selectedDate;
+      html += '<div class="date-chip ' + (active ? "active" : "") + '" data-date="' + iso + '">';
+      html += '<span class="dow">' + DOW[d.getDay()] + '</span><span class="dom">' + d.getDate() + '.' + MONTHS[d.getMonth()] + '</span></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function renderBuchen() {
+    var html = renderDateScroll();
+    var dateISO = state.selectedDate;
+    html += '<div class="legend"><span><i style="background:var(--free-border)"></i>frei</span><span><i style="background:var(--busy-border)"></i>belegt</span><span><i style="background:var(--permanent-border)"></i>dauerhaft belegt</span></div>';
+
+    ROOMS.forEach(function (room) {
+      html += '<div class="room-card"><h3>' + escapeHtml(room.label) + '</h3>';
+      if (room.permanent) {
+        var r210 = room210State(dateISO);
+        if (r210 === "unconfigured") {
+          html += '<div class="room-note">Noch nicht konfiguriert – bitte in der Systemverwaltung einen Stammnutzer festlegen.</div>';
+        } else if (r210 === "locked") {
+          var owner = profileById(state.config.permanent_user_210);
+          html += '<div class="room-note">Dauerhaft belegt von ' + escapeHtml(owner ? owner.full_name : "?") + ' (kein Home-Office). Wird an dessen Urlaubstagen automatisch freigegeben.</div>';
+        } else {
+          var owner2 = profileById(state.config.permanent_user_210);
+          html += '<div class="room-note">' + escapeHtml(owner2 ? owner2.full_name : "Stammnutzer") + ' hat heute Urlaub – der Platz ist buchbar.</div>';
+        }
+      }
+      room.workspaces.forEach(function (ws) {
+        html += '<div class="workspace-row"><div class="ws-label">' + escapeHtml(ws.label) + '</div><div class="ws-slots">';
+        if (room.permanent && room210State(dateISO) === "locked") {
+          html += '<div class="slot-btn permanent">Dauerhaft belegt</div>';
+        } else if (room.permanent && room210State(dateISO) === "unconfigured") {
+          html += '<div class="slot-btn locked">Nicht verfügbar</div>';
+        } else {
+          ["AM", "PM"].forEach(function (part) {
+            var s = slotStatus(ws.id, dateISO, part);
+            if (s.status === "free") {
+              html += '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + '</button>';
+            } else {
+              var owner = profileById(s.booking.user_id);
+              html += '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(owner ? owner.full_name : "belegt") + '</small></div>';
+            }
+          });
+        }
+        html += '</div></div>';
+      });
+      html += '</div>';
+    });
+    return html;
+  }
+
+  function renderMeine() {
+    var mine = state.bookings.filter(function (b) { return b.user_id === state.profile.id; }).sort(function (a, b) { return a.booking_date.localeCompare(b.booking_date); });
+    var html = '<div class="card"><h3>Meine Buchungen</h3>';
+    if (!mine.length) { html += '<div class="empty-state">Noch keine Buchungen vorhanden.</div>'; }
+    else {
+      mine.forEach(function (b) {
+        var room = ROOMS.find(function (r) { return r.number === b.room_number; });
+        var ws = room ? room.workspaces.find(function (w) { return w.id === b.workspace_id; }) : null;
+        var d = parseISO(b.booking_date);
+        html += '<div class="booking-item"><div><div class="booking-main">' + (room ? escapeHtml(room.label) : b.room_number) + (ws ? " · " + escapeHtml(ws.label) : "") + '</div>';
+        html += '<div class="booking-sub">' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + ' · ' + PART_LABEL[b.part] + '</div></div>';
+        html += '<button class="btn-danger" data-cancel="' + b.id + '">Stornieren</button></div>';
+      });
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderUrlaub() {
+    var mine = state.vacations.filter(function (v) { return v.user_id === state.profile.id; }).sort(function (a, b) { return a.vacation_date.localeCompare(b.vacation_date); });
+    var isOwner210 = state.config.permanent_user_210 === state.profile.id;
+    var html = '<div class="card"><h3>Urlaub eintragen</h3>';
+    if (isOwner210) html += '<div class="banner">Da du Raum 210 dauerhaft nutzt, wird der Platz an deinen Urlaubstagen automatisch für andere buchbar.</div>';
+    html += '<label for="vacDate">Datum</label><input type="date" id="vacDate" min="' + fmtISO(new Date()) + '">';
+    html += '<div style="height:10px"></div><button class="btn-primary" id="addVacBtn">Urlaubstag eintragen</button></div>';
+    html += '<div class="card"><h3>Meine Urlaubstage</h3>';
+    if (!mine.length) { html += '<div class="empty-state">Keine Einträge vorhanden.</div>'; }
+    else {
+      mine.forEach(function (v) {
+        var d = parseISO(v.vacation_date);
+        html += '<div class="vacation-item"><div class="booking-main">' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</div>';
+        html += '<button class="btn-danger" data-rmvac="' + v.id + '">Entfernen</button></div>';
+      });
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderAdmin() {
+    var html = '<div class="card"><h3>Systemverwaltung</h3>';
+    html += '<div class="modal-sub">Stammnutzer für Raum 210 festlegen (dieser Platz wird nur an dessen Urlaubstagen für andere buchbar).</div>';
+    html += '<label for="permSelect">Stammnutzer Raum 210</label><select id="permSelect"><option value="">– nicht festgelegt –</option>';
+    state.profiles.forEach(function (u) {
+      var sel = state.config.permanent_user_210 === u.id ? " selected" : "";
+      html += '<option value="' + u.id + '"' + sel + '>' + escapeHtml(u.full_name) + '</option>';
+    });
+    html += '</select><div style="height:10px"></div><button class="btn-primary" id="savePermBtn">Speichern</button></div>';
+
+    html += '<div class="card"><h3>Übersicht kommende ' + WORKDAY_COUNT + ' Arbeitstage</h3>';
+    var upcoming = state.bookings.filter(function (b) { return state.dates.some(function (d) { return fmtISO(d) === b.booking_date; }); })
+      .sort(function (a, b) { return a.booking_date.localeCompare(b.booking_date); });
+    if (!upcoming.length) { html += '<div class="empty-state">Noch keine Buchungen im Zeitraum.</div>'; }
+    else {
+      upcoming.forEach(function (b) {
+        var room = ROOMS.find(function (r) { return r.number === b.room_number; });
+        var owner = profileById(b.user_id);
+        var d = parseISO(b.booking_date);
+        html += '<div class="admin-row"><span>' + DOW[d.getDay()] + ' ' + d.getDate() + '.' + MONTHS[d.getMonth()] + ' · ' + (room ? escapeHtml(room.label) : b.room_number) + ' · ' + PART_LABEL[b.part] + '</span><span>' + escapeHtml(owner ? owner.full_name : "?") + '</span></div>';
+      });
+    }
+    html += '</div>';
+
+    html += '<div class="card"><h3>Urlaubsmeldungen</h3>';
+    var vac = state.vacations.slice().sort(function (a, b) { return a.vacation_date.localeCompare(b.vacation_date); });
+    if (!vac.length) { html += '<div class="empty-state">Keine Urlaubstage gemeldet.</div>'; }
+    else {
+      vac.forEach(function (v) {
+        var owner = profileById(v.user_id);
+        var d = parseISO(v.vacation_date);
+        html += '<div class="admin-row"><span>' + DOW[d.getDay()] + ' ' + d.getDate() + '.' + MONTHS[d.getMonth()] + '</span><span>' + escapeHtml(owner ? owner.full_name : "?") + '</span></div>';
+      });
+    }
+    html += '</div>';
+
+    if (!state.profile || !state.profile.is_admin) {
+      html += '<div class="empty-state">Hinweis: Änderungen hier werden nur übernommen, wenn dein Konto als Administrator markiert ist.</div>';
+    }
+    return html;
+  }
+
+  function renderModal() {
+    var m = state.modal; if (!m || m.type !== "book") return "";
+    var html = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">';
+    html += '<h3>' + escapeHtml(m.room.label) + ' · ' + escapeHtml(m.workspace.label) + '</h3>';
+    var d = parseISO(m.dateISO);
+    html += '<div class="modal-sub">' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</div>';
+    html += '<div class="part-options">';
+    ["AM", "PM", "FULL"].forEach(function (part) {
+      var enabled = part === "FULL" ? (m.amFree && m.pmFree) : (part === "AM" ? m.amFree : m.pmFree);
+      var cls = "part-opt" + (enabled ? "" : " disabled") + (m.selectedPart === part ? " selected" : "");
+      html += '<button class="' + cls + '" data-part="' + part + '" ' + (enabled ? "" : "disabled") + '>' + PART_LABEL[part] + (enabled ? "" : " · belegt") + '</button>';
+    });
+    html += '</div><div class="modal-actions"><button class="btn-secondary" id="modalCancel">Abbrechen</button>';
+    html += '<button class="btn-primary" id="modalConfirm"' + (m.selectedPart ? "" : " disabled") + '>Buchen</button></div></div></div>';
+    return html;
+  }
+
+  function bindShell() {
+    document.getElementById("logoutBtn").addEventListener("click", signOut);
+    document.querySelectorAll("nav.tabs button").forEach(function (btn) {
+      btn.addEventListener("click", function () { state.tab = btn.getAttribute("data-tab"); render(); });
+    });
+    document.getElementById("adminLink").addEventListener("click", function () { state.tab = "admin"; render(); });
+
+    document.querySelectorAll(".date-chip").forEach(function (chip) {
+      chip.addEventListener("click", function () { state.selectedDate = chip.getAttribute("data-date"); render(); });
+    });
+    document.querySelectorAll(".slot-btn.free").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var room = ROOMS.find(function (r) { return r.number === btn.getAttribute("data-room"); });
+        var ws = room.workspaces.find(function (w) { return w.id === btn.getAttribute("data-ws"); });
+        openBookingModal(room, ws, state.selectedDate);
+      });
+    });
+    document.querySelectorAll("[data-cancel]").forEach(function (btn) { btn.addEventListener("click", function () { cancelBooking(btn.getAttribute("data-cancel")); }); });
+    document.querySelectorAll("[data-rmvac]").forEach(function (btn) { btn.addEventListener("click", function () { removeVacation(btn.getAttribute("data-rmvac")); }); });
+
+    var addVacBtn = document.getElementById("addVacBtn");
+    if (addVacBtn) addVacBtn.addEventListener("click", function () {
+      var val = document.getElementById("vacDate").value;
+      if (!val) { showToast("Bitte ein Datum wählen."); return; }
+      addVacation(val);
+    });
+    var savePermBtn = document.getElementById("savePermBtn");
+    if (savePermBtn) savePermBtn.addEventListener("click", function () { savePermanentUser(document.getElementById("permSelect").value); });
+
+    var backdrop = document.getElementById("modalBackdrop");
+    if (backdrop) {
+      backdrop.addEventListener("click", function (e) { if (e.target === backdrop) closeModal(); });
+      document.getElementById("modalCancel").addEventListener("click", closeModal);
+      document.getElementById("modalConfirm").addEventListener("click", confirmBooking);
+      document.querySelectorAll(".part-opt").forEach(function (btn) {
+        btn.addEventListener("click", function () { if (btn.disabled) return; state.modal.selectedPart = btn.getAttribute("data-part"); render(); });
+      });
+    }
+  }
+
+  // ---------- init ----------
+
+  function init() {
+    state.dates = buildWorkdays(WORKDAY_COUNT);
+    state.selectedDate = fmtISO(state.dates[0]);
+    render();
+
+    supabaseClient.auth.getSession().then(function (res) {
+      state.session = res.data.session;
+      if (state.session) afterLogin(); else render();
+    });
+
+    supabaseClient.auth.onAuthStateChange(function (event, session) {
+      state.session = session;
+      if (!session) { state.profile = null; render(); }
+    });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
