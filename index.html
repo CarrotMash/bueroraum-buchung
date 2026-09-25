@@ -97,6 +97,8 @@
   .workspace-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .ws-label { font-size: 13px; font-weight: 600; min-width: 62px; }
   .ws-slots { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; justify-content: flex-end; }
+  .ws-full-row { margin-top: 6px; }
+  .full-day-btn { width: 100%; text-align: center; }
   .slot-btn { border-radius: 9px; padding: 7px 10px; font-size: 11.5px; font-weight: 600; border: 1.5px solid; cursor: pointer; min-width: 64px; text-align: center; line-height: 1.25; }
   .slot-btn.free { background: var(--free); border-color: var(--free-border); color: var(--free-text); }
   .slot-btn.busy { background: var(--busy); border-color: var(--busy-border); color: var(--busy-text); cursor: default; }
@@ -310,10 +312,10 @@
 
   // ---------- booking actions ----------
 
-  function openBookingModal(room, workspace, dateISO) {
+  function openBookingModal(room, workspace, dateISO, preselectPart) {
     var amStatus = slotStatus(workspace.id, dateISO, "AM");
     var pmStatus = slotStatus(workspace.id, dateISO, "PM");
-    state.modal = { type: "book", room: room, workspace: workspace, dateISO: dateISO, amFree: amStatus.status === "free", pmFree: pmStatus.status === "free", selectedPart: null };
+    state.modal = { type: "book", room: room, workspace: workspace, dateISO: dateISO, amFree: amStatus.status === "free", pmFree: pmStatus.status === "free", selectedPart: preselectPart || null };
     render();
   }
   function closeModal() { state.modal = null; render(); }
@@ -525,6 +527,14 @@
     return html;
   }
 
+  function partButtonHtml(room, ws, part, status) {
+    if (status.status === "free") {
+      return '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + '</button>';
+    }
+    var owner = profileById(status.booking.user_id);
+    return '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(owner ? owner.full_name : "belegt") + '</small></div>';
+  }
+
   function renderBuchen() {
     var html = renderDateScroll();
     var dateISO = state.selectedDate;
@@ -538,18 +548,22 @@
         if (permState === "locked") {
           var owner = profileById(state.permanentAssignments[ws.id]);
           html += '<div class="slot-btn permanent">Dauerhaft belegt<small>' + escapeHtml(owner ? owner.full_name : "?") + '</small></div>';
+          html += '</div></div>';
         } else {
-          ["AM", "PM"].forEach(function (part) {
-            var s = slotStatus(ws.id, dateISO, part);
-            if (s.status === "free") {
-              html += '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + '</button>';
-            } else {
-              var owner2 = profileById(s.booking.user_id);
-              html += '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(owner2 ? owner2.full_name : "belegt") + '</small></div>';
-            }
-          });
+          var amStatus = slotStatus(ws.id, dateISO, "AM");
+          var pmStatus = slotStatus(ws.id, dateISO, "PM");
+          html += partButtonHtml(room, ws, "AM", amStatus);
+          html += partButtonHtml(room, ws, "PM", pmStatus);
+          html += '</div></div>';
+          var fullFree = amStatus.status === "free" && pmStatus.status === "free";
+          html += '<div class="ws-full-row">';
+          if (fullFree) {
+            html += '<button class="slot-btn free full-day-btn" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="FULL">Ganztags buchen</button>';
+          } else {
+            html += '<div class="slot-btn locked full-day-btn">Ganztags nicht verfügbar</div>';
+          }
+          html += '</div>';
         }
-        html += '</div></div>';
         if (permState === "released") {
           var owner3 = profileById(state.permanentAssignments[ws.id]);
           html += '<div class="room-note">' + escapeHtml(owner3 ? owner3.full_name : "Stammnutzer:in") + ' hat heute Urlaub – Platz ist buchbar.</div>';
@@ -692,7 +706,7 @@
       btn.addEventListener("click", function () {
         var room = ROOMS.find(function (r) { return r.number === btn.getAttribute("data-room"); });
         var ws = room.workspaces.find(function (w) { return w.id === btn.getAttribute("data-ws"); });
-        openBookingModal(room, ws, state.selectedDate);
+        openBookingModal(room, ws, state.selectedDate, btn.getAttribute("data-part"));
       });
     });
     document.querySelectorAll("[data-cancel]").forEach(function (btn) { btn.addEventListener("click", function () { cancelBooking(btn.getAttribute("data-cancel")); }); });
