@@ -185,7 +185,7 @@
   });
 
   var PART_LABEL = { AM: "Vormittag", PM: "Nachmittag", FULL: "Ganztags" };
-  var PART_TIME = { AM: "bis 12:00", PM: "ab 12:00", FULL: "ganztägig" };
+  var PART_TIME = { AM: "bis 12:00", PM: "ab 12:00", FULL: "" };
   var WORKDAY_COUNT = 10;
 
   var state = {
@@ -526,7 +526,8 @@
 
   function partButtonHtml(room, ws, part, isFree, unavailableNote) {
     if (isFree) {
-      return '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + '<small>' + PART_TIME[part] + '</small></button>';
+      var timeNote = PART_TIME[part] ? '<small>' + PART_TIME[part] + '</small>' : '';
+      return '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + timeNote + '</button>';
     }
     return '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(unavailableNote || "belegt") + '</small></div>';
   }
@@ -671,11 +672,11 @@
     var html = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">';
     html += '<h3>Buchung bestätigen</h3>';
     var d = parseISO(m.dateISO);
-    var timeNote = { AM: "bis 12:00 Uhr", PM: "ab 12:00 Uhr", FULL: "ganzer Tag" }[m.part];
+    var timeNote = { AM: "bis 12:00 Uhr", PM: "ab 12:00 Uhr", FULL: "" }[m.part];
     html += '<div class="confirm-summary">';
     html += '<div class="confirm-row"><span>Arbeitsplatz</span><b>' + escapeHtml(m.room.label) + ' · ' + escapeHtml(m.workspace.label) + '</b></div>';
     html += '<div class="confirm-row"><span>Datum</span><b>' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</b></div>';
-    html += '<div class="confirm-row"><span>Zeitraum</span><b>' + PART_LABEL[m.part] + ' (' + timeNote + ')</b></div>';
+    html += '<div class="confirm-row"><span>Zeitraum</span><b>' + PART_LABEL[m.part] + (timeNote ? ' (' + timeNote + ')' : '') + '</b></div>';
     html += '</div>';
     html += '<div class="modal-actions"><button class="btn-secondary" id="modalCancel">Abbrechen</button>';
     html += '<button class="btn-primary" id="modalConfirm">Jetzt buchen</button></div></div></div>';
