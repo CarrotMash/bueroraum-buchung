@@ -746,6 +746,23 @@
       state.session = session;
       if (!session) { state.profile = null; render(); }
     });
+
+    // Keeps the date strip current if the tab is left open across midnight:
+    // whenever the tab regains focus, re-check whether "today" has moved on.
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) return;
+      var freshDates = buildWorkdays(WORKDAY_COUNT);
+      var datesChanged = !state.dates.length || fmtISO(freshDates[0]) !== fmtISO(state.dates[0]);
+      if (datesChanged) {
+        state.dates = freshDates;
+        state.selectedDate = fmtISO(freshDates[0]);
+      }
+      if (state.session && state.profile) {
+        loadBookings();
+        loadVacations();
+      }
+      if (datesChanged) render();
+    });
   }
 
   init();
