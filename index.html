@@ -92,8 +92,9 @@
   .room-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
   .room-card h3 { margin: 0 0 2px; font-size: 15px; }
   .room-card .room-note { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
-  .workspace-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
-  .workspace-row:first-of-type { border-top: none; }
+  .workspace-block { padding: 8px 0; border-top: 1px solid var(--border); }
+  .workspace-block:first-child { border-top: none; padding-top: 0; }
+  .workspace-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .ws-label { font-size: 13px; font-weight: 600; min-width: 62px; }
   .ws-slots { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; justify-content: flex-end; }
   .slot-btn { border-radius: 9px; padding: 7px 10px; font-size: 11.5px; font-weight: 600; border: 1.5px solid; cursor: pointer; min-width: 64px; text-align: center; line-height: 1.25; }
@@ -170,11 +171,18 @@
   var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   var ROOMS = [
-    { number: "210", label: "Raum 210", permanent: true, workspaces: [{ id: "210-1", label: "Platz 1" }] },
+    { number: "210", label: "Raum 210", workspaces: [{ id: "210-1", label: "Platz 1" }] },
     { number: "211", label: "Raum 211", workspaces: [{ id: "211-1", label: "Platz 1" }] },
     { number: "212", label: "Raum 212", workspaces: [{ id: "212-1", label: "Platz 1" }, { id: "212-2", label: "Platz 2" }] },
     { number: "213", label: "Raum 213", workspaces: [{ id: "213-1", label: "Platz 1" }, { id: "213-2", label: "Platz 2" }] }
   ];
+
+  var ALL_WORKSPACES = [];
+  ROOMS.forEach(function (room) {
+    room.workspaces.forEach(function (ws) {
+      ALL_WORKSPACES.push({ workspaceId: ws.id, workspaceLabel: ws.label, roomNumber: room.number, roomLabel: room.label });
+    });
+  });
 
   var PART_LABEL = { AM: "Vormittag", PM: "Nachmittag", FULL: "Ganztags" };
   var WORKDAY_COUNT = 10;
@@ -188,7 +196,7 @@
     dates: [],
     bookings: [],
     vacations: [],
-    config: { permanent_user_210: null },
+    permanentAssignments: {},   // workspace_id -> user_id
     modal: null,
     toastMsg: null,
     authMode: "login",      // 'login' | 'register'
@@ -239,9 +247,9 @@
     return { status: "free", booking: null };
   }
 
-  function room210State(dateISO) {
-    var ownerId = state.config.permanent_user_210;
-    if (!ownerId) return "unconfigured";
+  function workspacePermState(workspaceId, dateISO) {
+    var ownerId = state.permanentAssignments[workspaceId];
+    if (!ownerId) return null;
     var onVacation = state.vacations.some(function (v) { return v.user_id === ownerId && v.vacation_date === dateISO; });
     return onVacation ? "released" : "locked";
   }
@@ -363,10 +371,24 @@
     });
   }
 
-  function savePermanentUser(userId) {
-    supabaseClient.from("app_config").update({ permanent_user_210: userId || null }).eq("id", 1).then(function (res) {
-      if (res.error) { showToast("Speichern fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
-      showToast("Gespeichert."); loadConfig();
+  function savePermanentAssignments(newMap) {
+    var toUpsert = [];
+    var toDeleteWs = [];
+    ALL_WORKSPACES.forEach(function (w) {
+      var newVal = newMap[w.workspaceId] || null;
+      var oldVal = state.permanentAssignments[w.workspaceId] || null;
+      if (newVal === oldVal) return;
+      if (newVal) toUpsert.push({ workspace_id: w.workspaceId, user_id: newVal });
+      else toDeleteWs.push(w.workspaceId);
+    });
+    var ops = [];
+    if (toUpsert.length) ops.push(supabaseClient.from("permanent_assignments").upsert(toUpsert, { onConflict: "workspace_id" }));
+    if (toDeleteWs.length) ops.push(supabaseClient.from("permanent_assignments").delete().in("workspace_id", toDeleteWs));
+    if (!ops.length) { showToast("Keine Änderungen."); return; }
+    Promise.all(ops).then(function (results) {
+      var errored = results.filter(function (r) { return r.error; });
+      if (errored.length) { showToast("Speichern fehlgeschlagen: " + errored[0].error.message); console.error(errored[0].error); return; }
+      showToast("Gespeichert."); loadPermanentAssignments();
     });
   }
 
@@ -387,16 +409,19 @@
       if (!res.error) state.vacations = res.data || []; render();
     });
   }
-  function loadConfig() {
-    return supabaseClient.from("app_config").select("permanent_user_210").eq("id", 1).single().then(function (res) {
-      if (!res.error && res.data) state.config = res.data; render();
+  function loadPermanentAssignments() {
+    return supabaseClient.from("permanent_assignments").select("workspace_id, user_id").then(function (res) {
+      var map = {};
+      if (!res.error) (res.data || []).forEach(function (row) { map[row.workspace_id] = row.user_id; });
+      state.permanentAssignments = map;
+      render();
     });
   }
 
   function loadAllData(afterAuth) {
     state.loadingData = true;
     render();
-    Promise.all([loadProfiles(), loadBookings(), loadVacations(), loadConfig()]).then(function () {
+    Promise.all([loadProfiles(), loadBookings(), loadVacations(), loadPermanentAssignments()]).then(function () {
       state.profile = profileById(state.session.user.id);
       if (!state.profile) {
         // profile row may not exist yet (trigger race right after signup) — retry once shortly
@@ -507,36 +532,29 @@
 
     ROOMS.forEach(function (room) {
       html += '<div class="room-card"><h3>' + escapeHtml(room.label) + '</h3>';
-      if (room.permanent) {
-        var r210 = room210State(dateISO);
-        if (r210 === "unconfigured") {
-          html += '<div class="room-note">Noch nicht konfiguriert – bitte in der Systemverwaltung einen Stammnutzer festlegen.</div>';
-        } else if (r210 === "locked") {
-          var owner = profileById(state.config.permanent_user_210);
-          html += '<div class="room-note">Dauerhaft belegt von ' + escapeHtml(owner ? owner.full_name : "?") + ' (kein Home-Office). Wird an dessen Urlaubstagen automatisch freigegeben.</div>';
-        } else {
-          var owner2 = profileById(state.config.permanent_user_210);
-          html += '<div class="room-note">' + escapeHtml(owner2 ? owner2.full_name : "Stammnutzer") + ' hat heute Urlaub – der Platz ist buchbar.</div>';
-        }
-      }
       room.workspaces.forEach(function (ws) {
-        html += '<div class="workspace-row"><div class="ws-label">' + escapeHtml(ws.label) + '</div><div class="ws-slots">';
-        if (room.permanent && room210State(dateISO) === "locked") {
-          html += '<div class="slot-btn permanent">Dauerhaft belegt</div>';
-        } else if (room.permanent && room210State(dateISO) === "unconfigured") {
-          html += '<div class="slot-btn locked">Nicht verfügbar</div>';
+        var permState = workspacePermState(ws.id, dateISO);
+        html += '<div class="workspace-block"><div class="workspace-row"><div class="ws-label">' + escapeHtml(ws.label) + '</div><div class="ws-slots">';
+        if (permState === "locked") {
+          var owner = profileById(state.permanentAssignments[ws.id]);
+          html += '<div class="slot-btn permanent">Dauerhaft belegt<small>' + escapeHtml(owner ? owner.full_name : "?") + '</small></div>';
         } else {
           ["AM", "PM"].forEach(function (part) {
             var s = slotStatus(ws.id, dateISO, part);
             if (s.status === "free") {
               html += '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + '</button>';
             } else {
-              var owner = profileById(s.booking.user_id);
-              html += '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(owner ? owner.full_name : "belegt") + '</small></div>';
+              var owner2 = profileById(s.booking.user_id);
+              html += '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(owner2 ? owner2.full_name : "belegt") + '</small></div>';
             }
           });
         }
         html += '</div></div>';
+        if (permState === "released") {
+          var owner3 = profileById(state.permanentAssignments[ws.id]);
+          html += '<div class="room-note">' + escapeHtml(owner3 ? owner3.full_name : "Stammnutzer:in") + ' hat heute Urlaub – Platz ist buchbar.</div>';
+        }
+        html += '</div>';
       });
       html += '</div>';
     });
@@ -562,10 +580,22 @@
   }
 
   function renderUrlaub() {
+    var myWorkspaceIds = Object.keys(state.permanentAssignments).filter(function (wsId) { return state.permanentAssignments[wsId] === state.profile.id; });
+
+    if (!myWorkspaceIds.length) {
+      var html0 = '<div class="card"><h3>Urlaub</h3>';
+      html0 += '<div class="empty-state">Die Urlaubseintragung ist nur für Kolleg:innen mit einem dauerhaft zugewiesenen Arbeitsplatz relevant (weil dieser Platz sonst blockiert bleibt). Dir ist aktuell kein fester Platz zugewiesen – du buchst einfach direkt an den Tagen, an denen du ins Büro kommst. Ein Eintrag hier ist für dich nicht nötig.</div></div>';
+      return html0;
+    }
+
+    var myLabels = myWorkspaceIds.map(function (wsId) {
+      var w = ALL_WORKSPACES.find(function (x) { return x.workspaceId === wsId; });
+      return w ? (w.roomLabel + " · " + w.workspaceLabel) : wsId;
+    }).join(", ");
+
     var mine = state.vacations.filter(function (v) { return v.user_id === state.profile.id; }).sort(function (a, b) { return a.vacation_date.localeCompare(b.vacation_date); });
-    var isOwner210 = state.config.permanent_user_210 === state.profile.id;
     var html = '<div class="card"><h3>Urlaub eintragen</h3>';
-    if (isOwner210) html += '<div class="banner">Da du Raum 210 dauerhaft nutzt, wird der Platz an deinen Urlaubstagen automatisch für andere buchbar.</div>';
+    html += '<div class="banner">Dir ist ' + escapeHtml(myLabels) + ' dauerhaft zugewiesen. An deinen Urlaubstagen wird der Platz automatisch für andere buchbar.</div>';
     html += '<label for="vacStart">Von</label><input type="date" id="vacStart" min="' + fmtISO(new Date()) + '">';
     html += '<label for="vacEnd">Bis</label><input type="date" id="vacEnd" min="' + fmtISO(new Date()) + '">';
     html += '<div class="booking-sub" style="margin-top:8px">Es werden nur Werktage (Mo–Fr) im gewählten Zeitraum eingetragen, Wochenenden automatisch übersprungen.</div>';
@@ -585,13 +615,17 @@
 
   function renderAdmin() {
     var html = '<div class="card"><h3>Systemverwaltung</h3>';
-    html += '<div class="modal-sub">Stammnutzer für Raum 210 festlegen (dieser Platz wird nur an dessen Urlaubstagen für andere buchbar).</div>';
-    html += '<label for="permSelect">Stammnutzer Raum 210</label><select id="permSelect"><option value="">– nicht festgelegt –</option>';
-    state.profiles.forEach(function (u) {
-      var sel = state.config.permanent_user_210 === u.id ? " selected" : "";
-      html += '<option value="' + u.id + '"' + sel + '>' + escapeHtml(u.full_name) + '</option>';
+    html += '<div class="modal-sub">Feste Arbeitsplätze für Kolleg:innen ohne Home-Office festlegen. Ein zugewiesener Platz ist normalerweise gesperrt und wird nur an den Urlaubstagen der zugewiesenen Person für andere buchbar.</div>';
+    ALL_WORKSPACES.forEach(function (w) {
+      html += '<label for="perm-' + w.workspaceId + '">' + escapeHtml(w.roomLabel) + ' · ' + escapeHtml(w.workspaceLabel) + '</label>';
+      html += '<select id="perm-' + w.workspaceId + '" data-ws="' + w.workspaceId + '"><option value="">– kein Dauernutzer –</option>';
+      state.profiles.forEach(function (u) {
+        var sel = state.permanentAssignments[w.workspaceId] === u.id ? " selected" : "";
+        html += '<option value="' + u.id + '"' + sel + '>' + escapeHtml(u.full_name) + '</option>';
+      });
+      html += '</select>';
     });
-    html += '</select><div style="height:10px"></div><button class="btn-primary" id="savePermBtn">Speichern</button></div>';
+    html += '<div style="height:10px"></div><button class="btn-primary" id="savePermBtn">Speichern</button></div>';
 
     if (!state.profile || !state.profile.is_admin) {
       html += '<div class="empty-state">Hinweis: Änderungen hier werden nur übernommen, wenn dein Konto als Administrator markiert ist.</div>';
@@ -673,7 +707,11 @@
       addVacationRange(startVal, endVal);
     });
     var savePermBtn = document.getElementById("savePermBtn");
-    if (savePermBtn) savePermBtn.addEventListener("click", function () { savePermanentUser(document.getElementById("permSelect").value); });
+    if (savePermBtn) savePermBtn.addEventListener("click", function () {
+      var newMap = {};
+      document.querySelectorAll("select[data-ws]").forEach(function (sel) { newMap[sel.getAttribute("data-ws")] = sel.value; });
+      savePermanentAssignments(newMap);
+    });
 
     var backdrop = document.getElementById("modalBackdrop");
     if (backdrop) {
