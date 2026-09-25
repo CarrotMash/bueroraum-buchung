@@ -76,8 +76,8 @@
   .user-chip span.uname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .user-chip button { background: none; border: none; color: #fff; opacity: 0.75; font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline; flex-shrink: 0; }
 
-  nav.tabs { display: flex; gap: 6px; margin-top: 14px; background: rgba(255,255,255,0.14); padding: 4px; border-radius: 12px; }
-  nav.tabs button { flex: 1; border: none; background: transparent; color: #fff; opacity: 0.75; padding: 9px 6px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  nav.tabs { display: flex; gap: 4px; margin-top: 14px; background: rgba(255,255,255,0.14); padding: 4px; border-radius: 12px; }
+  nav.tabs button { flex: 1; border: none; background: transparent; color: #fff; opacity: 0.75; padding: 9px 4px; border-radius: 9px; font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
   nav.tabs button.active { background: #fff; color: var(--vak-blue); opacity: 1; }
 
   main { flex: 1; padding: 16px 16px 90px; max-width: 640px; margin: 0 auto; width: 100%; }
@@ -331,12 +331,28 @@
     });
   }
 
-  function addVacation(dateISO) {
-    var exists = state.vacations.some(function (v) { return v.user_id === state.profile.id && v.vacation_date === dateISO; });
-    if (exists) { showToast("Bereits eingetragen."); return; }
-    supabaseClient.from("vacations").insert({ user_id: state.profile.id, vacation_date: dateISO }).then(function (res) {
-      if (res.error) { showToast("Eintragen fehlgeschlagen."); console.error(res.error); return; }
-      showToast("Urlaubstag eingetragen."); loadVacations();
+  function weekdaysBetween(startISO, endISO) {
+    var out = [];
+    var d = parseISO(startISO);
+    var end = parseISO(endISO);
+    while (d <= end) {
+      var wd = d.getDay();
+      if (wd !== 0 && wd !== 6) out.push(fmtISO(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+
+  function addVacationRange(startISO, endISO) {
+    var allDates = weekdaysBetween(startISO, endISO);
+    if (!allDates.length) { showToast("Der Zeitraum enthält keine Werktage."); return; }
+    var existing = state.vacations.filter(function (v) { return v.user_id === state.profile.id; }).map(function (v) { return v.vacation_date; });
+    var toInsert = allDates.filter(function (d) { return existing.indexOf(d) === -1; }).map(function (d) { return { user_id: state.profile.id, vacation_date: d }; });
+    if (!toInsert.length) { showToast("Dieser Zeitraum ist bereits vollständig eingetragen."); return; }
+    supabaseClient.from("vacations").insert(toInsert).then(function (res) {
+      if (res.error) { showToast("Eintragen fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      showToast(toInsert.length + " Urlaubstag(e) eingetragen.");
+      loadVacations();
     });
   }
 
@@ -456,13 +472,15 @@
     html += '</div>';
     html += '<nav class="tabs">';
     html += '<button data-tab="buchen" class="' + (state.tab === "buchen" ? "active" : "") + '">Buchen</button>';
-    html += '<button data-tab="meine" class="' + (state.tab === "meine" ? "active" : "") + '">Meine Buchungen</button>';
+    html += '<button data-tab="meine" class="' + (state.tab === "meine" ? "active" : "") + '">Meine</button>';
     html += '<button data-tab="urlaub" class="' + (state.tab === "urlaub" ? "active" : "") + '">Urlaub</button>';
+    html += '<button data-tab="uebersicht" class="' + (state.tab === "uebersicht" ? "active" : "") + '">Übersicht</button>';
     html += '</nav></header>';
     html += '<main>';
     if (state.tab === "buchen") html += renderBuchen();
     else if (state.tab === "meine") html += renderMeine();
     else if (state.tab === "urlaub") html += renderUrlaub();
+    else if (state.tab === "uebersicht") html += renderUebersicht();
     else if (state.tab === "admin") html += renderAdmin();
     html += '</main>';
     html += '<footer class="app-footer"><a id="adminLink">Systemverwaltung</a></footer>';
@@ -548,8 +566,10 @@
     var isOwner210 = state.config.permanent_user_210 === state.profile.id;
     var html = '<div class="card"><h3>Urlaub eintragen</h3>';
     if (isOwner210) html += '<div class="banner">Da du Raum 210 dauerhaft nutzt, wird der Platz an deinen Urlaubstagen automatisch für andere buchbar.</div>';
-    html += '<label for="vacDate">Datum</label><input type="date" id="vacDate" min="' + fmtISO(new Date()) + '">';
-    html += '<div style="height:10px"></div><button class="btn-primary" id="addVacBtn">Urlaubstag eintragen</button></div>';
+    html += '<label for="vacStart">Von</label><input type="date" id="vacStart" min="' + fmtISO(new Date()) + '">';
+    html += '<label for="vacEnd">Bis</label><input type="date" id="vacEnd" min="' + fmtISO(new Date()) + '">';
+    html += '<div class="booking-sub" style="margin-top:8px">Es werden nur Werktage (Mo–Fr) im gewählten Zeitraum eingetragen, Wochenenden automatisch übersprungen.</div>';
+    html += '<div style="height:10px"></div><button class="btn-primary" id="addVacBtn">Urlaubszeitraum eintragen</button></div>';
     html += '<div class="card"><h3>Meine Urlaubstage</h3>';
     if (!mine.length) { html += '<div class="empty-state">Keine Einträge vorhanden.</div>'; }
     else {
@@ -573,35 +593,37 @@
     });
     html += '</select><div style="height:10px"></div><button class="btn-primary" id="savePermBtn">Speichern</button></div>';
 
-    html += '<div class="card"><h3>Übersicht kommende ' + WORKDAY_COUNT + ' Arbeitstage</h3>';
-    var upcoming = state.bookings.filter(function (b) { return state.dates.some(function (d) { return fmtISO(d) === b.booking_date; }); })
-      .sort(function (a, b) { return a.booking_date.localeCompare(b.booking_date); });
-    if (!upcoming.length) { html += '<div class="empty-state">Noch keine Buchungen im Zeitraum.</div>'; }
-    else {
-      upcoming.forEach(function (b) {
-        var room = ROOMS.find(function (r) { return r.number === b.room_number; });
-        var owner = profileById(b.user_id);
-        var d = parseISO(b.booking_date);
-        html += '<div class="admin-row"><span>' + DOW[d.getDay()] + ' ' + d.getDate() + '.' + MONTHS[d.getMonth()] + ' · ' + (room ? escapeHtml(room.label) : b.room_number) + ' · ' + PART_LABEL[b.part] + '</span><span>' + escapeHtml(owner ? owner.full_name : "?") + '</span></div>';
-      });
-    }
-    html += '</div>';
-
-    html += '<div class="card"><h3>Urlaubsmeldungen</h3>';
-    var vac = state.vacations.slice().sort(function (a, b) { return a.vacation_date.localeCompare(b.vacation_date); });
-    if (!vac.length) { html += '<div class="empty-state">Keine Urlaubstage gemeldet.</div>'; }
-    else {
-      vac.forEach(function (v) {
-        var owner = profileById(v.user_id);
-        var d = parseISO(v.vacation_date);
-        html += '<div class="admin-row"><span>' + DOW[d.getDay()] + ' ' + d.getDate() + '.' + MONTHS[d.getMonth()] + '</span><span>' + escapeHtml(owner ? owner.full_name : "?") + '</span></div>';
-      });
-    }
-    html += '</div>';
-
     if (!state.profile || !state.profile.is_admin) {
       html += '<div class="empty-state">Hinweis: Änderungen hier werden nur übernommen, wenn dein Konto als Administrator markiert ist.</div>';
     }
+    html += '<div class="empty-state">Eine Gesamtübersicht aller Buchungen und Urlaubstage findest du im Tab „Übersicht".</div>';
+    return html;
+  }
+
+  function renderUebersicht() {
+    var html = '<div class="card"><h3>Team-Übersicht</h3><div class="modal-sub">Alle Buchungen und Urlaubstage der nächsten ' + WORKDAY_COUNT + ' Arbeitstage.</div></div>';
+    state.dates.forEach(function (d) {
+      var iso = fmtISO(d);
+      var dayBookings = state.bookings.filter(function (b) { return b.booking_date === iso; })
+        .sort(function (a, b) { return a.room_number.localeCompare(b.room_number) || a.workspace_id.localeCompare(b.workspace_id); });
+      var dayVacations = state.vacations.filter(function (v) { return v.vacation_date === iso; });
+      html += '<div class="card"><h3>' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</h3>';
+      if (!dayBookings.length && !dayVacations.length) {
+        html += '<div class="empty-state">Keine Einträge.</div>';
+      } else {
+        dayBookings.forEach(function (b) {
+          var room = ROOMS.find(function (r) { return r.number === b.room_number; });
+          var ws = room ? room.workspaces.find(function (w) { return w.id === b.workspace_id; }) : null;
+          var owner = profileById(b.user_id);
+          html += '<div class="admin-row"><span>' + (room ? escapeHtml(room.label) : b.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + ' · ' + PART_LABEL[b.part] + '</span><span>' + escapeHtml(owner ? owner.full_name : "?") + '</span></div>';
+        });
+        if (dayVacations.length) {
+          var names = dayVacations.map(function (v) { var o = profileById(v.user_id); return escapeHtml(o ? o.full_name : "?"); }).join(", ");
+          html += '<div class="room-note" style="margin-top:8px">Urlaub: ' + names + '</div>';
+        }
+      }
+      html += '</div>';
+    });
     return html;
   }
 
@@ -644,9 +666,11 @@
 
     var addVacBtn = document.getElementById("addVacBtn");
     if (addVacBtn) addVacBtn.addEventListener("click", function () {
-      var val = document.getElementById("vacDate").value;
-      if (!val) { showToast("Bitte ein Datum wählen."); return; }
-      addVacation(val);
+      var startVal = document.getElementById("vacStart").value;
+      var endVal = document.getElementById("vacEnd").value;
+      if (!startVal || !endVal) { showToast("Bitte Start- und Enddatum wählen."); return; }
+      if (endVal < startVal) { showToast("Das Enddatum muss nach dem Startdatum liegen."); return; }
+      addVacationRange(startVal, endVal);
     });
     var savePermBtn = document.getElementById("savePermBtn");
     if (savePermBtn) savePermBtn.addEventListener("click", function () { savePermanentUser(document.getElementById("permSelect").value); });
