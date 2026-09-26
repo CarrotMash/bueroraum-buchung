@@ -172,19 +172,36 @@
 
   var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  var ROOMS = [
-    { number: "210", label: "Raum 210", workspaces: [{ id: "210-1", label: "Platz 1" }] },
-    { number: "211", label: "Raum 211", workspaces: [{ id: "211-1", label: "Platz 1" }] },
-    { number: "212", label: "Raum 212", workspaces: [{ id: "212-1", label: "Platz 1 (links)" }, { id: "212-2", label: "Platz 2 (rechts)" }] },
-    { number: "213", label: "Raum 213", workspaces: [{ id: "213-1", label: "Platz 1 (links)" }, { id: "213-2", label: "Platz 2 (rechts)" }] }
-  ];
+  // Räume, Arbeitsplätze und Gruppen kommen jetzt aus der Datenbank (state.groups/state.rooms/state.workspaces),
+  // damit Admins künftig weitere Räume/Gruppen selbst anlegen können, statt sie im Code zu pflegen.
+  // Diese Helfer bauen daraus dieselbe Struktur, die der bisherige Code erwartet hat ({number,label,workspaces:[{id,label}]}).
 
-  var ALL_WORKSPACES = [];
-  ROOMS.forEach(function (room) {
-    room.workspaces.forEach(function (ws) {
-      ALL_WORKSPACES.push({ workspaceId: ws.id, workspaceLabel: ws.label, roomNumber: room.number, roomLabel: room.label });
+  function allRoomsWithWorkspaces() {
+    return state.rooms.slice().sort(function (a, b) { return a.sort_order - b.sort_order; }).map(function (r) {
+      var wss = state.workspaces.filter(function (w) { return w.room_id === r.id; })
+        .sort(function (a, b) { return a.sort_order - b.sort_order; });
+      return {
+        number: r.number, label: r.label, groupId: r.group_id,
+        workspaces: wss.map(function (w) { return { id: w.id, label: w.label }; })
+      };
     });
-  });
+  }
+  function roomsForGroup(groupId) {
+    return allRoomsWithWorkspaces().filter(function (r) { return r.groupId === groupId; });
+  }
+  function findRoomByNumber(roomNumber) {
+    return allRoomsWithWorkspaces().find(function (r) { return r.number === roomNumber; }) || null;
+  }
+  function allWorkspacesFlat() {
+    var out = [];
+    allRoomsWithWorkspaces().forEach(function (room) {
+      room.workspaces.forEach(function (ws) {
+        out.push({ workspaceId: ws.id, workspaceLabel: ws.label, roomNumber: room.number, roomLabel: room.label, groupId: room.groupId });
+      });
+    });
+    return out;
+  }
+  function groupById(id) { return state.groups.find(function (g) { return g.id === id; }) || null; }
 
   var PART_LABEL = { AM: "Vormittag", PM: "Nachmittag", FULL: "Ganztags" };
   var PART_TIME = { AM: "bis 12:00", PM: "ab 12:00", FULL: "" };
@@ -192,8 +209,11 @@
 
   var state = {
     session: null,
-    profile: null,          // own profile row { id, full_name, is_admin }
+    profile: null,          // own profile row { id, full_name, is_admin, group_id }
     profiles: [],           // all profiles, for name lookups + admin dropdown
+    groups: [],              // { id, name }
+    rooms: [],                // { id, number, label, group_id, sort_order }
+    workspaces: [],           // { id, room_id, label, sort_order }
     tab: "buchen",
     selectedDate: null,
     dates: [],
@@ -270,7 +290,7 @@
     }
     var conflict = myConflictingBooking(dateISO, part, ws.id);
     if (conflict) {
-      var croom = ROOMS.find(function (r) { return r.number === conflict.room_number; });
+      var croom = findRoomByNumber(conflict.room_number);
       var cws = croom ? croom.workspaces.find(function (w) { return w.id === conflict.workspace_id; }) : null;
       var where = (croom ? croom.label : conflict.room_number) + (cws ? " · " + cws.label : "");
       return { kind: "own", note: where, conflictId: conflict.id };
@@ -287,9 +307,9 @@
 
   // ---------- auth ----------
 
-  function handleAuthSubmit(email, password, fullName) {
+  function handleAuthSubmit(email, password, fullName, groupId) {
     state.authError = null; state.authInfo = null;
-    if (!email || !password || (state.authMode === "register" && !fullName)) {
+    if (!email || !password || (state.authMode === "register" && (!fullName || !groupId))) {
       state.authError = "Bitte alle Felder ausfüllen."; render(); return;
     }
     state.authBusy = true; render();
@@ -297,7 +317,7 @@
     if (state.authMode === "register") {
       supabaseClient.auth.signUp({
         email: email, password: password,
-        options: { data: { full_name: fullName } }
+        options: { data: { full_name: fullName, group_id: groupId } }
       }).then(function (res) {
         state.authBusy = false;
         if (res.error) { state.authError = translateAuthError(res.error.message); render(); return; }
@@ -412,7 +432,7 @@
   function savePermanentAssignments(newMap) {
     var toUpsert = [];
     var toDeleteWs = [];
-    ALL_WORKSPACES.forEach(function (w) {
+    allWorkspacesFlat().forEach(function (w) {
       var newVal = newMap[w.workspaceId] || null;
       var oldVal = state.permanentAssignments[w.workspaceId] || null;
       if (newVal === oldVal) return;
@@ -430,11 +450,88 @@
     });
   }
 
+  // ---------- groups / rooms / workspaces admin actions ----------
+
+  function createGroup(name) {
+    if (!name) { showToast("Bitte einen Namen eingeben."); return; }
+    supabaseClient.from("groups").insert({ name: name }).then(function (res) {
+      if (res.error) { showToast("Anlegen fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      showToast("Gruppe angelegt."); loadGroups();
+    });
+  }
+
+  function saveUserGroups(newMap) {
+    var ops = [];
+    state.profiles.forEach(function (u) {
+      var newVal = newMap[u.id] || null;
+      var oldVal = u.group_id || null;
+      if (newVal === oldVal) return;
+      ops.push(supabaseClient.from("profiles").update({ group_id: newVal }).eq("id", u.id));
+    });
+    if (!ops.length) { showToast("Keine Änderungen."); return; }
+    Promise.all(ops).then(function (results) {
+      var errored = results.filter(function (r) { return r.error; });
+      if (errored.length) { showToast("Speichern fehlgeschlagen: " + errored[0].error.message); console.error(errored[0].error); return; }
+      showToast("Gespeichert."); loadProfiles().then(render);
+    });
+  }
+
+  function saveRoomGroups(newMap) {
+    var ops = [];
+    state.rooms.forEach(function (r) {
+      var newVal = newMap[r.id] || null;
+      var oldVal = r.group_id || null;
+      if (newVal === oldVal) return;
+      ops.push(supabaseClient.from("rooms").update({ group_id: newVal }).eq("id", r.id));
+    });
+    if (!ops.length) { showToast("Keine Änderungen."); return; }
+    Promise.all(ops).then(function (results) {
+      var errored = results.filter(function (r) { return r.error; });
+      if (errored.length) { showToast("Speichern fehlgeschlagen: " + errored[0].error.message); console.error(errored[0].error); return; }
+      showToast("Gespeichert."); loadRooms();
+    });
+  }
+
+  function createRoom(number, label, groupId) {
+    if (!number || !label || !groupId) { showToast("Bitte alle Felder ausfüllen."); return; }
+    supabaseClient.from("rooms").insert({ id: number, number: number, label: label, group_id: groupId, sort_order: state.rooms.length + 1 }).then(function (res) {
+      if (res.error) { showToast("Anlegen fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      showToast("Raum angelegt."); loadRooms();
+    });
+  }
+
+  function createWorkspace(roomId, label) {
+    if (!roomId || !label) { showToast("Bitte alle Felder ausfüllen."); return; }
+    var count = state.workspaces.filter(function (w) { return w.room_id === roomId; }).length;
+    supabaseClient.from("workspaces").insert({ id: roomId + "-" + (count + 1), room_id: roomId, label: label, sort_order: count + 1 }).then(function (res) {
+      if (res.error) { showToast("Anlegen fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      showToast("Arbeitsplatz angelegt."); loadWorkspaces();
+    });
+  }
+
   // ---------- data loading ----------
 
   function loadProfiles() {
-    return supabaseClient.from("profiles").select("id, full_name, is_admin").then(function (res) {
+    return supabaseClient.from("profiles").select("id, full_name, is_admin, group_id").then(function (res) {
       if (!res.error) state.profiles = res.data || [];
+    });
+  }
+  function loadGroups() {
+    return supabaseClient.from("groups").select("id, name").order("name").then(function (res) {
+      if (!res.error) state.groups = res.data || [];
+      render();
+    });
+  }
+  function loadRooms() {
+    return supabaseClient.from("rooms").select("id, number, label, group_id, sort_order").order("sort_order").then(function (res) {
+      if (!res.error) state.rooms = res.data || [];
+      render();
+    });
+  }
+  function loadWorkspaces() {
+    return supabaseClient.from("workspaces").select("id, room_id, label, sort_order").order("sort_order").then(function (res) {
+      if (!res.error) state.workspaces = res.data || [];
+      render();
     });
   }
   function loadBookings() {
@@ -459,7 +556,7 @@
   function loadAllData(afterAuth) {
     state.loadingData = true;
     render();
-    Promise.all([loadProfiles(), loadBookings(), loadVacations(), loadPermanentAssignments()]).then(function () {
+    Promise.all([loadProfiles(), loadBookings(), loadVacations(), loadPermanentAssignments(), loadGroups(), loadRooms(), loadWorkspaces()]).then(function () {
       state.profile = profileById(state.session.user.id);
       if (!state.profile) {
         // profile row may not exist yet (trigger race right after signup) — retry once shortly
@@ -498,6 +595,9 @@
     html += '<form id="authForm">';
     if (isRegister) {
       html += '<div class="auth-field"><label for="fullName">Name</label><input type="text" id="fullName" autocomplete="name" placeholder="Vorname Nachname"></div>';
+      html += '<div class="auth-field"><label for="regGroup">Gruppe</label><select id="regGroup"><option value="">– bitte wählen –</option>';
+      state.groups.forEach(function (g) { html += '<option value="' + g.id + '">' + escapeHtml(g.name) + '</option>'; });
+      html += '</select></div>';
     }
     html += '<div class="auth-field"><label for="authEmail">E-Mail</label><input type="email" id="authEmail" autocomplete="email" placeholder="name@beispiel.de"></div>';
     html += '<div class="auth-field"><label for="authPassword">Passwort</label><input type="password" id="authPassword" autocomplete="' + (isRegister ? "new-password" : "current-password") + '" placeholder="mind. 6 Zeichen"></div>';
@@ -517,7 +617,9 @@
       var password = document.getElementById("authPassword").value;
       var fullNameEl = document.getElementById("fullName");
       var fullName = fullNameEl ? fullNameEl.value.trim() : null;
-      handleAuthSubmit(email, password, fullName);
+      var groupEl = document.getElementById("regGroup");
+      var groupId = groupEl ? groupEl.value : null;
+      handleAuthSubmit(email, password, fullName, groupId);
     });
     document.getElementById("switchAuth").addEventListener("click", function () {
       state.authMode = state.authMode === "register" ? "login" : "register";
@@ -577,8 +679,13 @@
   }
 
   function renderBuchen() {
-    var html = renderDateScroll();
     var dateISO = state.selectedDate;
+
+    if (!state.profile.group_id) {
+      return '<div class="card"><h3>Buchen</h3><div class="empty-state">Dir wurde noch keine Gruppe zugewiesen. Bitte wende dich an eine Systemverwaltung, damit dir Räume angezeigt werden können.</div></div>';
+    }
+
+    var html = renderDateScroll();
     var myPermWorkspaceIds = Object.keys(state.permanentAssignments).filter(function (wsId) { return state.permanentAssignments[wsId] === state.profile.id; });
     var hasOwnPermanentDesk = myPermWorkspaceIds.length > 0;
     var iAmOnVacationToday = state.vacations.some(function (v) { return v.user_id === state.profile.id && v.vacation_date === dateISO; });
@@ -587,7 +694,11 @@
       html += '<div class="banner">Dir ist ein fester Büroarbeitsplatz dauerhaft zugewiesen. Andere Arbeitsplätze kannst du daher nicht buchen.</div>';
     }
 
-    ROOMS.forEach(function (room) {
+    var myRooms = roomsForGroup(state.profile.group_id);
+    if (!myRooms.length) {
+      html += '<div class="empty-state">Für deine Gruppe sind aktuell keine Räume hinterlegt.</div>';
+    }
+    myRooms.forEach(function (room) {
       html += '<div class="room-card"><h3>' + escapeHtml(room.label) + '</h3>';
       room.workspaces.forEach(function (ws) {
         var permState = workspacePermState(ws.id, dateISO);
@@ -631,7 +742,7 @@
     if (!mine.length) { html += '<div class="empty-state">Noch keine Buchungen vorhanden.</div>'; }
     else {
       mine.forEach(function (b) {
-        var room = ROOMS.find(function (r) { return r.number === b.room_number; });
+        var room = findRoomByNumber(b.room_number);
         var ws = room ? room.workspaces.find(function (w) { return w.id === b.workspace_id; }) : null;
         var d = parseISO(b.booking_date);
         html += '<div class="booking-item"><div><div class="booking-main">' + (room ? escapeHtml(room.label) : b.room_number) + (ws ? " · " + escapeHtml(ws.label) : "") + '</div>';
@@ -653,7 +764,7 @@
     }
 
     var myLabels = myWorkspaceIds.map(function (wsId) {
-      var w = ALL_WORKSPACES.find(function (x) { return x.workspaceId === wsId; });
+      var w = allWorkspacesFlat().find(function (x) { return x.workspaceId === wsId; });
       return w ? (w.roomLabel + " · " + w.workspaceLabel) : wsId;
     }).join(", ");
 
@@ -679,8 +790,70 @@
 
   function renderAdmin() {
     var html = '<div class="card"><h3>Systemverwaltung</h3>';
+    if (!state.profile || !state.profile.is_admin) {
+      html += '<div class="empty-state">Hinweis: Änderungen hier werden nur übernommen, wenn dein Konto als Administrator markiert ist.</div>';
+    }
+    html += '<div class="empty-state">Eine Gesamtübersicht aller Buchungen und Urlaubstage findest du im Tab „Übersicht".</div></div>';
+
+    // --- Gruppen ---
+    html += '<div class="card"><h3>Gruppen</h3>';
+    html += '<div class="modal-sub">Jede Gruppe (z. B. eine Abteilung oder ein Stab) sieht nur ihre eigenen Räume. Nutzer:innen und Räume werden weiter unten einer Gruppe zugeordnet.</div>';
+    if (!state.groups.length) { html += '<div class="empty-state">Noch keine Gruppen angelegt.</div>'; }
+    else {
+      state.groups.forEach(function (g) {
+        html += '<div class="admin-row"><span>' + escapeHtml(g.name) + '</span></div>';
+      });
+    }
+    html += '<label for="newGroupName">Neue Gruppe</label><input type="text" id="newGroupName" placeholder="z. B. Team Personal">';
+    html += '<div style="height:10px"></div><button class="btn-primary" id="addGroupBtn">Gruppe anlegen</button></div>';
+
+    // --- Nutzer-Gruppen-Zuordnung ---
+    html += '<div class="card"><h3>Gruppen-Zuordnung: Nutzer:innen</h3>';
+    state.profiles.forEach(function (u) {
+      html += '<label for="usergroup-' + u.id + '">' + escapeHtml(u.full_name) + '</label>';
+      html += '<select id="usergroup-' + u.id + '" data-user="' + u.id + '"><option value="">– keine Gruppe –</option>';
+      state.groups.forEach(function (g) {
+        var sel = u.group_id === g.id ? " selected" : "";
+        html += '<option value="' + g.id + '"' + sel + '>' + escapeHtml(g.name) + '</option>';
+      });
+      html += '</select>';
+    });
+    html += '<div style="height:10px"></div><button class="btn-primary" id="saveUserGroupsBtn">Speichern</button></div>';
+
+    // --- Raum-Gruppen-Zuordnung ---
+    html += '<div class="card"><h3>Gruppen-Zuordnung: Räume</h3>';
+    state.rooms.forEach(function (r) {
+      html += '<label for="roomgroup-' + r.id + '">' + escapeHtml(r.label) + '</label>';
+      html += '<select id="roomgroup-' + r.id + '" data-room="' + r.id + '"><option value="">– keine Gruppe –</option>';
+      state.groups.forEach(function (g) {
+        var sel = r.group_id === g.id ? " selected" : "";
+        html += '<option value="' + g.id + '"' + sel + '>' + escapeHtml(g.name) + '</option>';
+      });
+      html += '</select>';
+    });
+    html += '<div style="height:10px"></div><button class="btn-primary" id="saveRoomGroupsBtn">Speichern</button></div>';
+
+    // --- Neuen Raum anlegen ---
+    html += '<div class="card"><h3>Neuen Raum anlegen</h3>';
+    html += '<label for="newRoomNumber">Raumnummer</label><input type="text" id="newRoomNumber" placeholder="z. B. 305">';
+    html += '<label for="newRoomLabel">Anzeigename</label><input type="text" id="newRoomLabel" placeholder="z. B. Raum 305">';
+    html += '<label for="newRoomGroup">Gruppe</label><select id="newRoomGroup"><option value="">– bitte wählen –</option>';
+    state.groups.forEach(function (g) { html += '<option value="' + g.id + '">' + escapeHtml(g.name) + '</option>'; });
+    html += '</select>';
+    html += '<div style="height:10px"></div><button class="btn-primary" id="addRoomBtn">Raum anlegen</button></div>';
+
+    // --- Arbeitsplatz zu vorhandenem Raum hinzufügen ---
+    html += '<div class="card"><h3>Arbeitsplatz hinzufügen</h3>';
+    html += '<label for="newWsRoom">Raum</label><select id="newWsRoom"><option value="">– bitte wählen –</option>';
+    state.rooms.forEach(function (r) { html += '<option value="' + r.id + '">' + escapeHtml(r.label) + '</option>'; });
+    html += '</select>';
+    html += '<label for="newWsLabel">Bezeichnung</label><input type="text" id="newWsLabel" placeholder="z. B. Platz 1 oder Platz 1 (links)">';
+    html += '<div style="height:10px"></div><button class="btn-primary" id="addWsBtn">Arbeitsplatz anlegen</button></div>';
+
+    // --- Dauerhafte Zuweisungen ---
+    html += '<div class="card"><h3>Dauerhafte Arbeitsplätze</h3>';
     html += '<div class="modal-sub">Feste Arbeitsplätze für Kolleg:innen ohne Home-Office festlegen. Ein zugewiesener Platz ist normalerweise gesperrt und wird nur an den Urlaubstagen der zugewiesenen Person für andere buchbar.</div>';
-    ALL_WORKSPACES.forEach(function (w) {
+    allWorkspacesFlat().forEach(function (w) {
       html += '<label for="perm-' + w.workspaceId + '">' + escapeHtml(w.roomLabel) + ' · ' + escapeHtml(w.workspaceLabel) + '</label>';
       html += '<select id="perm-' + w.workspaceId + '" data-ws="' + w.workspaceId + '"><option value="">– kein Dauernutzer –</option>';
       state.profiles.forEach(function (u) {
@@ -691,10 +864,6 @@
     });
     html += '<div style="height:10px"></div><button class="btn-primary" id="savePermBtn">Speichern</button></div>';
 
-    if (!state.profile || !state.profile.is_admin) {
-      html += '<div class="empty-state">Hinweis: Änderungen hier werden nur übernommen, wenn dein Konto als Administrator markiert ist.</div>';
-    }
-    html += '<div class="empty-state">Eine Gesamtübersicht aller Buchungen und Urlaubstage findest du im Tab „Übersicht".</div>';
     return html;
   }
 
@@ -710,7 +879,7 @@
         html += '<div class="empty-state">Keine Einträge.</div>';
       } else {
         dayBookings.forEach(function (b) {
-          var room = ROOMS.find(function (r) { return r.number === b.room_number; });
+          var room = findRoomByNumber(b.room_number);
           var ws = room ? room.workspaces.find(function (w) { return w.id === b.workspace_id; }) : null;
           var owner = profileById(b.user_id);
           html += '<div class="admin-row"><span>' + (room ? escapeHtml(room.label) : b.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + ' · ' + PART_LABEL[b.part] + '</span><span>' + escapeHtml(owner ? owner.full_name : "?") + '</span></div>';
@@ -753,7 +922,7 @@
     });
     document.querySelectorAll(".slot-btn.free").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        var room = ROOMS.find(function (r) { return r.number === btn.getAttribute("data-room"); });
+        var room = findRoomByNumber(btn.getAttribute("data-room"));
         var ws = room.workspaces.find(function (w) { return w.id === btn.getAttribute("data-ws"); });
         openBookingModal(room, ws, state.selectedDate, btn.getAttribute("data-part"));
       });
@@ -778,6 +947,36 @@
       document.querySelectorAll("select[data-ws]").forEach(function (sel) { newMap[sel.getAttribute("data-ws")] = sel.value; });
       savePermanentAssignments(newMap);
     });
+    var addGroupBtn = document.getElementById("addGroupBtn");
+    if (addGroupBtn) addGroupBtn.addEventListener("click", function () {
+      var name = document.getElementById("newGroupName").value.trim();
+      createGroup(name);
+    });
+    var saveUserGroupsBtn = document.getElementById("saveUserGroupsBtn");
+    if (saveUserGroupsBtn) saveUserGroupsBtn.addEventListener("click", function () {
+      var newMap = {};
+      document.querySelectorAll("select[data-user]").forEach(function (sel) { newMap[sel.getAttribute("data-user")] = sel.value; });
+      saveUserGroups(newMap);
+    });
+    var saveRoomGroupsBtn = document.getElementById("saveRoomGroupsBtn");
+    if (saveRoomGroupsBtn) saveRoomGroupsBtn.addEventListener("click", function () {
+      var newMap = {};
+      document.querySelectorAll("select[data-room]").forEach(function (sel) { newMap[sel.getAttribute("data-room")] = sel.value; });
+      saveRoomGroups(newMap);
+    });
+    var addRoomBtn = document.getElementById("addRoomBtn");
+    if (addRoomBtn) addRoomBtn.addEventListener("click", function () {
+      var number = document.getElementById("newRoomNumber").value.trim();
+      var label = document.getElementById("newRoomLabel").value.trim();
+      var groupId = document.getElementById("newRoomGroup").value;
+      createRoom(number, label, groupId);
+    });
+    var addWsBtn = document.getElementById("addWsBtn");
+    if (addWsBtn) addWsBtn.addEventListener("click", function () {
+      var roomId = document.getElementById("newWsRoom").value;
+      var label = document.getElementById("newWsLabel").value.trim();
+      createWorkspace(roomId, label);
+    });
 
     var backdrop = document.getElementById("modalBackdrop");
     if (backdrop) {
@@ -793,6 +992,9 @@
     state.dates = buildWorkdays(WORKDAY_COUNT);
     state.selectedDate = fmtISO(state.dates[0]);
     render();
+
+    // Gruppen werden bereits vor dem Login geladen, damit sie im Registrierungsformular auswählbar sind.
+    loadGroups();
 
     supabaseClient.auth.getSession().then(function (res) {
       state.session = res.data.session;
