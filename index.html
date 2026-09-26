@@ -510,6 +510,24 @@
     });
   }
 
+  function removeUser(userId, fullName) {
+    if (!window.confirm('Konto von "' + fullName + '" wirklich vollständig entfernen? Das kann nicht rückgängig gemacht werden.')) return;
+    showToast("Wird entfernt…");
+    supabaseClient.functions.invoke("delete-user", { body: { userId: userId } }).then(function (res) {
+      if (res.error || (res.data && res.data.error)) {
+        var msg = (res.data && res.data.error) || (res.error && res.error.message) || "Unbekannter Fehler.";
+        showToast("Entfernen fehlgeschlagen: " + msg);
+        console.error(res.error || res.data);
+        return;
+      }
+      showToast("Konto entfernt.");
+      loadProfiles().then(render);
+      loadPermanentAssignments();
+      loadBookings();
+      loadVacations();
+    }).catch(function (e) { showToast("Entfernen fehlgeschlagen."); console.error(e); });
+  }
+
   // ---------- data loading ----------
 
   function loadProfiles() {
@@ -823,6 +841,17 @@
     });
     html += '<div style="height:10px"></div><button class="btn-primary" id="saveUserGroupsBtn">Speichern</button></div>';
 
+    // --- Nutzer:innen entfernen ---
+    html += '<div class="card"><h3>Nutzer:innen entfernen</h3>';
+    html += '<div class="modal-sub">Entfernt das Konto vollständig (inkl. Login, Buchungen, Urlaubstagen und Dauerzuweisungen) – z. B. bei ausgeschiedenen Kolleg:innen. Das kann nicht rückgängig gemacht werden.</div>';
+    state.profiles.forEach(function (u) {
+      var isSelf = state.profile && u.id === state.profile.id;
+      html += '<div class="admin-row"><span>' + escapeHtml(u.full_name) + (u.is_admin ? ' (Admin)' : '') + '</span>';
+      html += isSelf ? '<span style="color:var(--text-muted)">eigenes Konto</span>' : '<button class="btn-danger" data-remove-user="' + u.id + '">Entfernen</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+
     // --- Raum-Gruppen-Zuordnung ---
     html += '<div class="card"><h3>Gruppen-Zuordnung: Räume</h3>';
     state.rooms.forEach(function (r) {
@@ -979,6 +1008,13 @@
       var roomId = document.getElementById("newWsRoom").value;
       var label = document.getElementById("newWsLabel").value.trim();
       createWorkspace(roomId, label);
+    });
+    document.querySelectorAll("[data-remove-user]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-remove-user");
+        var u = profileById(id);
+        removeUser(id, u ? u.full_name : "diese Person");
+      });
     });
 
     var backdrop = document.getElementById("modalBackdrop");
