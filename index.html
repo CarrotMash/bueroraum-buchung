@@ -607,8 +607,7 @@
         }
         html += '</div>';
         if (permState === "released") {
-          var owner3 = profileById(state.permanentAssignments[ws.id]);
-          html += '<div class="room-note">' + escapeHtml(owner3 ? owner3.full_name : "Stammnutzer:in") + ' hat heute Urlaub – Platz ist buchbar.</div>';
+          html += '<div class="room-note">Dieser Platz ist heute urlaubsbedingt buchbar.</div>';
         }
         html += '</div>';
       });
