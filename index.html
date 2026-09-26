@@ -583,7 +583,7 @@
     var hasOwnPermanentDesk = myPermWorkspaceIds.length > 0;
     var iAmOnVacationToday = state.vacations.some(function (v) { return v.user_id === state.profile.id && v.vacation_date === dateISO; });
     html += '<div class="legend"><span><i style="background:var(--free-border)"></i>frei</span><span><i style="background:var(--busy-border)"></i>belegt</span><span><i style="background:var(--permanent-border)"></i>dauerhaft belegt</span></div>';
-    if (hasOwnPermanentDesk && !iAmOnVacationToday) {
+    if (hasOwnPermanentDesk) {
       html += '<div class="banner">Dir ist ein fester Büroarbeitsplatz dauerhaft zugewiesen. Andere Arbeitsplätze kannst du daher nicht buchen.</div>';
     }
 
@@ -593,11 +593,11 @@
         var permState = workspacePermState(ws.id, dateISO);
         var isMyPermanentWs = myPermWorkspaceIds.indexOf(ws.id) !== -1;
         html += '<div class="workspace-block"><div class="ws-label">' + escapeHtml(ws.label) + '</div><div class="ws-slots">';
-        if (permState === "locked") {
+        if (hasOwnPermanentDesk && (!isMyPermanentWs || iAmOnVacationToday)) {
+          html += '<div class="slot-btn permanent full-span">Nicht buchbar</div>';
+        } else if (permState === "locked") {
           var owner = profileById(state.permanentAssignments[ws.id]);
           html += '<div class="slot-btn permanent full-span">Dauerhaft belegt<small>' + escapeHtml(owner ? owner.full_name : "?") + '</small></div>';
-        } else if (hasOwnPermanentDesk && !isMyPermanentWs && !iAmOnVacationToday) {
-          html += '<div class="slot-btn permanent full-span">Nicht buchbar<small>Dir ist bereits ein fester Arbeitsplatz zugewiesen</small></div>';
         } else {
           var amAvail = partAvailability(ws, dateISO, "AM");
           var pmAvail = partAvailability(ws, dateISO, "PM");
@@ -615,7 +615,7 @@
           html += partButtonHtml(room, ws, "FULL", fullAvail);
         }
         html += '</div>';
-        if (permState === "released") {
+        if (!iAmOnVacationToday && permState === "released") {
           html += '<div class="room-note">Dieser Platz ist heute urlaubsbedingt buchbar.</div>';
         }
         html += '</div>';
