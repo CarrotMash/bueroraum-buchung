@@ -349,7 +349,7 @@
     if (!msg) return "Unbekannter Fehler.";
     if (/invalid login credentials/i.test(msg)) return "E-Mail oder Passwort ist falsch.";
     if (/already registered|already exists/i.test(msg)) return "Für diese E-Mail existiert bereits ein Konto.";
-    if (/password.*(least|6|characters)/i.test(msg)) return "Das Passwort muss mindestens 6 Zeichen haben.";
+    if (/password.*(least|characters|weak|lowercase|uppercase|digit)/i.test(msg)) return "Das Passwort erfüllt nicht die Anforderungen: mindestens 8 Zeichen, mit Buchstaben und Zahlen.";
     if (/email.*confirm/i.test(msg)) return "Bitte bestätige zuerst deine E-Mail-Adresse.";
     return msg;
   }
@@ -689,7 +689,7 @@
       html += '</select></div>';
     }
     html += '<div class="auth-field"><label for="authEmail">E-Mail</label><input type="email" id="authEmail" autocomplete="email" placeholder="name@beispiel.de"></div>';
-    html += '<div class="auth-field"><label for="authPassword">Passwort</label><input type="password" id="authPassword" autocomplete="' + (isRegister ? "new-password" : "current-password") + '" placeholder="mind. 6 Zeichen"></div>';
+    html += '<div class="auth-field"><label for="authPassword">Passwort</label><input type="password" id="authPassword" autocomplete="' + (isRegister ? "new-password" : "current-password") + '" placeholder="mind. 8 Zeichen, Buchstaben + Zahlen"></div>';
     html += '<button type="submit" class="btn-primary"' + (state.authBusy ? " disabled" : "") + '>' + (state.authBusy ? "Bitte warten…" : (isRegister ? "Konto erstellen" : "Anmelden")) + '</button>';
     html += '</form>';
     html += '<div class="auth-switch">';
