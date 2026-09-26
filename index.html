@@ -510,28 +510,51 @@
     });
   }
 
-  function removeUser(userId, fullName) {
-    if (!window.confirm('Konto von "' + fullName + '" wirklich vollständig entfernen? Das kann nicht rückgängig gemacht werden.')) return;
-    showToast("Wird entfernt…");
-    supabaseClient.functions.invoke("delete-user", { body: { userId: userId } }).then(function (res) {
+  function setUserStatus(userId, action, fullName) {
+    var confirmMsg = {
+      delete: 'Konto von "' + fullName + '" wirklich ENDGÜLTIG löschen? Alle Buchungen und Urlaubstage dieser Person werden unwiderruflich mitgelöscht. Das kann nicht rückgängig gemacht werden.',
+      deactivate: 'Konto von "' + fullName + '" deaktivieren? Login und Buchen werden gesperrt, die bisherige Historie bleibt erhalten. Kann jederzeit rückgängig gemacht werden.',
+      reactivate: 'Konto von "' + fullName + '" wieder aktivieren?'
+    }[action];
+    if (!window.confirm(confirmMsg)) return;
+    var busyMsg = { delete: "Wird gelöscht…", deactivate: "Wird deaktiviert…", reactivate: "Wird aktiviert…" }[action];
+    showToast(busyMsg);
+    supabaseClient.functions.invoke("delete-user", { body: { userId: userId, action: action } }).then(function (res) {
       if (res.error || (res.data && res.data.error)) {
         var msg = (res.data && res.data.error) || (res.error && res.error.message) || "Unbekannter Fehler.";
-        showToast("Entfernen fehlgeschlagen: " + msg);
+        showToast("Aktion fehlgeschlagen: " + msg);
         console.error(res.error || res.data);
         return;
       }
-      showToast("Konto entfernt.");
+      var doneMsg = { delete: "Konto gelöscht.", deactivate: "Konto deaktiviert.", reactivate: "Konto aktiviert." }[action];
+      showToast(doneMsg);
       loadProfiles().then(render);
       loadPermanentAssignments();
       loadBookings();
       loadVacations();
-    }).catch(function (e) { showToast("Entfernen fehlgeschlagen."); console.error(e); });
+    }).catch(function (e) { showToast("Aktion fehlgeschlagen."); console.error(e); });
+  }
+
+  function saveAdminRights(newMap) {
+    var ops = [];
+    state.profiles.forEach(function (u) {
+      var newVal = !!newMap[u.id];
+      var oldVal = !!u.is_admin;
+      if (newVal === oldVal) return;
+      ops.push(supabaseClient.from("profiles").update({ is_admin: newVal }).eq("id", u.id));
+    });
+    if (!ops.length) { showToast("Keine Änderungen."); return; }
+    Promise.all(ops).then(function (results) {
+      var errored = results.filter(function (r) { return r.error; });
+      if (errored.length) { showToast("Speichern fehlgeschlagen: " + errored[0].error.message); console.error(errored[0].error); return; }
+      showToast("Gespeichert."); loadProfiles().then(render);
+    });
   }
 
   // ---------- data loading ----------
 
   function loadProfiles() {
-    return supabaseClient.from("profiles").select("id, full_name, is_admin, group_id").then(function (res) {
+    return supabaseClient.from("profiles").select("id, full_name, is_admin, group_id, is_active").then(function (res) {
       if (!res.error) state.profiles = res.data || [];
     });
   }
@@ -841,13 +864,36 @@
     });
     html += '<div style="height:10px"></div><button class="btn-primary" id="saveUserGroupsBtn">Speichern</button></div>';
 
-    // --- Nutzer:innen entfernen ---
-    html += '<div class="card"><h3>Nutzer:innen entfernen</h3>';
-    html += '<div class="modal-sub">Entfernt das Konto vollständig (inkl. Login, Buchungen, Urlaubstagen und Dauerzuweisungen) – z. B. bei ausgeschiedenen Kolleg:innen. Das kann nicht rückgängig gemacht werden.</div>';
+    // --- Adminrechte ---
+    html += '<div class="card"><h3>Adminrechte</h3>';
+    html += '<div class="modal-sub">Wer als Admin markiert ist, kann Gruppen, Räume, Dauerzuweisungen und Nutzerkonten verwalten. Das eigene Admin-Recht kann hier aus Sicherheitsgründen nicht entzogen werden.</div>';
     state.profiles.forEach(function (u) {
       var isSelf = state.profile && u.id === state.profile.id;
-      html += '<div class="admin-row"><span>' + escapeHtml(u.full_name) + (u.is_admin ? ' (Admin)' : '') + '</span>';
-      html += isSelf ? '<span style="color:var(--text-muted)">eigenes Konto</span>' : '<button class="btn-danger" data-remove-user="' + u.id + '">Entfernen</button>';
+      html += '<label class="admin-row" style="justify-content:flex-start;gap:10px" for="isadmin-' + u.id + '">';
+      html += '<input type="checkbox" id="isadmin-' + u.id + '" data-admin-toggle="' + u.id + '"' + (u.is_admin ? " checked" : "") + (isSelf ? " disabled" : "") + '>';
+      html += '<span>' + escapeHtml(u.full_name) + (isSelf ? ' (dein Konto)' : '') + '</span></label>';
+    });
+    html += '<div style="height:10px"></div><button class="btn-primary" id="saveAdminRightsBtn">Speichern</button></div>';
+
+    // --- Nutzer:innen verwalten (deaktivieren/löschen) ---
+    html += '<div class="card"><h3>Nutzer:innen verwalten</h3>';
+    html += '<div class="modal-sub">Bei ausgeschiedenen Kolleg:innen zunächst <b>deaktivieren</b> – Login und Buchen werden gesperrt, die Buchungshistorie bleibt für Auswertungen erhalten und lässt sich jederzeit rückgängig machen. <b>Endgültig löschen</b> entfernt das Konto inklusive Historie unwiderruflich.</div>';
+    state.profiles.forEach(function (u) {
+      var isSelf = state.profile && u.id === state.profile.id;
+      var statusLabel = u.is_active === false ? ' · deaktiviert' : '';
+      html += '<div class="admin-row"><span>' + escapeHtml(u.full_name) + (u.is_admin ? ' (Admin)' : '') + statusLabel + '</span>';
+      if (isSelf) {
+        html += '<span style="color:var(--text-muted)">eigenes Konto</span>';
+      } else {
+        html += '<span style="display:flex;gap:6px">';
+        if (u.is_active === false) {
+          html += '<button class="btn-primary" style="width:auto;padding:7px 10px;font-size:11.5px" data-user-action="reactivate" data-user-id="' + u.id + '">Aktivieren</button>';
+        } else {
+          html += '<button class="btn-secondary" style="width:auto;padding:7px 10px;font-size:11.5px" data-user-action="deactivate" data-user-id="' + u.id + '">Deaktivieren</button>';
+        }
+        html += '<button class="btn-danger" data-user-action="delete" data-user-id="' + u.id + '">Löschen</button>';
+        html += '</span>';
+      }
       html += '</div>';
     });
     html += '</div>';
@@ -900,7 +946,10 @@
   }
 
   function renderUebersicht() {
-    var html = '<div class="card"><h3>Team-Übersicht</h3><div class="modal-sub">Alle Buchungen und Urlaubstage der nächsten ' + WORKDAY_COUNT + ' Arbeitstage.</div></div>';
+    var isAdmin = state.profile && state.profile.is_admin;
+    var scopeLabel = isAdmin ? "Alle Gruppen (Admin-Ansicht)" : (groupById(state.profile.group_id) ? groupById(state.profile.group_id).name : "");
+    var html = '<div class="group-heading">' + escapeHtml(scopeLabel) + '</div>';
+    html += '<div class="card"><h3>' + (isAdmin ? "Gesamt-Übersicht" : "Team-Übersicht") + '</h3><div class="modal-sub">' + (isAdmin ? "Alle Buchungen und Urlaubstage aller Gruppen für die nächsten " : "Alle Buchungen und Urlaubstage deiner Gruppe für die nächsten ") + WORKDAY_COUNT + ' Arbeitstage.</div></div>';
     state.dates.forEach(function (d) {
       var iso = fmtISO(d);
       var dayBookings = state.bookings.filter(function (b) { return b.booking_date === iso; })
@@ -1009,12 +1058,19 @@
       var label = document.getElementById("newWsLabel").value.trim();
       createWorkspace(roomId, label);
     });
-    document.querySelectorAll("[data-remove-user]").forEach(function (btn) {
+    document.querySelectorAll("[data-user-action]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        var id = btn.getAttribute("data-remove-user");
+        var id = btn.getAttribute("data-user-id");
+        var action = btn.getAttribute("data-user-action");
         var u = profileById(id);
-        removeUser(id, u ? u.full_name : "diese Person");
+        setUserStatus(id, action, u ? u.full_name : "diese Person");
       });
+    });
+    var saveAdminRightsBtn = document.getElementById("saveAdminRightsBtn");
+    if (saveAdminRightsBtn) saveAdminRightsBtn.addEventListener("click", function () {
+      var newMap = {};
+      document.querySelectorAll("[data-admin-toggle]").forEach(function (cb) { newMap[cb.getAttribute("data-admin-toggle")] = cb.checked; });
+      saveAdminRights(newMap);
     });
 
     var backdrop = document.getElementById("modalBackdrop");
