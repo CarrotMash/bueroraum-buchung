@@ -663,7 +663,12 @@
   function render() {
     var app = document.getElementById("app");
     if (!state.session) { app.innerHTML = renderLogin(); bindLogin(); return; }
-    if (state.loadingData && !state.profile) { app.innerHTML = '<div class="empty-state">Lädt…</div>'; return; }
+    if (!state.profile) {
+      app.innerHTML = '<div class="empty-state">Lädt…</div>';
+      // Sitzung vorhanden, aber Profil noch nicht geladen (z. B. direkt nach dem Bestätigungslink) — nachladen statt hängenzubleiben.
+      if (!state.loadingData) afterLogin();
+      return;
+    }
     app.innerHTML = renderShell();
     bindShell();
   }
@@ -1199,6 +1204,7 @@
     supabaseClient.auth.onAuthStateChange(function (event, session) {
       state.session = session;
       if (!session) { state.profile = null; render(); }
+      else if (!state.profile) { afterLogin(); }
     });
 
     // Keeps the date strip current if the tab is left open across midnight:
