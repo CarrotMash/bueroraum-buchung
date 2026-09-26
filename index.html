@@ -227,7 +227,11 @@
     authError: null,
     authInfo: null,
     authBusy: false,
-    loadingData: false
+    loadingData: false,
+    report: {
+      freqFrom: null, freqTo: null, freqRows: null, freqLoading: false,
+      logFrom: null, logTo: null, logRows: null, logLoading: false
+    }
   };
 
   function profileById(id) { for (var i = 0; i < state.profiles.length; i++) if (state.profiles[i].id === id) return state.profiles[i]; return null; }
@@ -551,6 +555,44 @@
     });
   }
 
+  // ---------- Auswertungen (nur Admin) ----------
+
+  function runFrequencyReport(fromISO, toISO) {
+    if (!fromISO || !toISO) { showToast("Bitte Zeitraum wählen."); return; }
+    if (toISO < fromISO) { showToast("Das Enddatum muss nach dem Startdatum liegen."); return; }
+    state.report.freqFrom = fromISO; state.report.freqTo = toISO;
+    state.report.freqLoading = true; state.report.freqRows = null; render();
+    supabaseClient.from("bookings").select("room_number")
+      .gte("booking_date", fromISO).lte("booking_date", toISO)
+      .then(function (res) {
+        state.report.freqLoading = false;
+        if (res.error) { showToast("Laden fehlgeschlagen: " + res.error.message); console.error(res.error); render(); return; }
+        var counts = {};
+        (res.data || []).forEach(function (b) { counts[b.room_number] = (counts[b.room_number] || 0) + 1; });
+        state.report.freqRows = Object.keys(counts).map(function (num) {
+          var room = findRoomByNumber(num);
+          return { label: room ? room.label : num, count: counts[num] };
+        }).sort(function (a, b) { return b.count - a.count; });
+        render();
+      });
+  }
+
+  function runBookingLog(fromISO, toISO) {
+    if (!fromISO || !toISO) { showToast("Bitte Zeitraum wählen."); return; }
+    if (toISO < fromISO) { showToast("Das Enddatum muss nach dem Startdatum liegen."); return; }
+    state.report.logFrom = fromISO; state.report.logTo = toISO;
+    state.report.logLoading = true; state.report.logRows = null; render();
+    supabaseClient.from("booking_log").select("id, action, event_at, user_id, acted_by, room_number, workspace_id, booking_date, part")
+      .gte("event_at", fromISO + "T00:00:00").lte("event_at", toISO + "T23:59:59")
+      .order("event_at", { ascending: false })
+      .then(function (res) {
+        state.report.logLoading = false;
+        if (res.error) { showToast("Laden fehlgeschlagen: " + res.error.message); console.error(res.error); render(); return; }
+        state.report.logRows = res.data || [];
+        render();
+      });
+  }
+
   // ---------- data loading ----------
 
   function loadProfiles() {
@@ -689,8 +731,9 @@
     else if (state.tab === "urlaub") html += renderUrlaub();
     else if (state.tab === "uebersicht") html += renderUebersicht();
     else if (state.tab === "admin") html += renderAdmin();
+    else if (state.tab === "auswertung") html += renderAuswertung();
     html += '</main>';
-    html += '<footer class="app-footer"><a id="adminLink">Systemverwaltung</a></footer>';
+    html += '<footer class="app-footer"><a id="adminLink">Systemverwaltung</a> · <a id="reportsLink">Auswertungen</a></footer>';
     if (state.modal) html += renderModal();
     if (state.toastMsg) html += '<div class="toast">' + escapeHtml(state.toastMsg) + '</div>';
     return html;
@@ -975,6 +1018,54 @@
     return html;
   }
 
+  function renderAuswertung() {
+    if (!state.profile || !state.profile.is_admin) {
+      return '<div class="card"><h3>Auswertungen</h3><div class="empty-state">Dieser Bereich ist nur für Administrator:innen sichtbar.</div></div>';
+    }
+
+    var html = '<div class="card"><h3>Buchungshäufigkeit je Raum</h3>';
+    html += '<div class="modal-sub">Anzahl der Buchungen je Raum in einem frei wählbaren Zeitraum (nach Datum der Buchung).</div>';
+    html += '<label for="freqFrom">Von</label><input type="date" id="freqFrom" value="' + escapeHtml(state.report.freqFrom || '') + '">';
+    html += '<label for="freqTo">Bis</label><input type="date" id="freqTo" value="' + escapeHtml(state.report.freqTo || '') + '">';
+    html += '<div style="height:10px"></div><button class="btn-primary" id="runFreqBtn"' + (state.report.freqLoading ? " disabled" : "") + '>' + (state.report.freqLoading ? "Lädt…" : "Auswerten") + '</button>';
+    if (state.report.freqRows) {
+      if (!state.report.freqRows.length) { html += '<div class="empty-state">Keine Buchungen im gewählten Zeitraum.</div>'; }
+      else {
+        state.report.freqRows.forEach(function (row) {
+          html += '<div class="admin-row"><span>' + escapeHtml(row.label) + '</span><span>' + row.count + ' Buchung(en)</span></div>';
+        });
+      }
+    }
+    html += '</div>';
+
+    html += '<div class="card"><h3>Buchungsprotokoll</h3>';
+    html += '<div class="modal-sub">Wer hat wann welche Buchung angelegt oder storniert – bleibt auch nach Stornierung erhalten.</div>';
+    html += '<label for="logFrom">Von</label><input type="date" id="logFrom" value="' + escapeHtml(state.report.logFrom || '') + '">';
+    html += '<label for="logTo">Bis</label><input type="date" id="logTo" value="' + escapeHtml(state.report.logTo || '') + '">';
+    html += '<div style="height:10px"></div><button class="btn-primary" id="runLogBtn"' + (state.report.logLoading ? " disabled" : "") + '>' + (state.report.logLoading ? "Lädt…" : "Protokoll laden") + '</button>';
+    if (state.report.logRows) {
+      if (!state.report.logRows.length) { html += '<div class="empty-state">Keine Einträge im gewählten Zeitraum.</div>'; }
+      else {
+        state.report.logRows.forEach(function (r) {
+          var dt = new Date(r.event_at);
+          var stamp = pad(dt.getDate()) + "." + pad(dt.getMonth() + 1) + "." + dt.getFullYear() + " " + pad(dt.getHours()) + ":" + pad(dt.getMinutes());
+          var actor = profileById(r.acted_by);
+          var owner = profileById(r.user_id);
+          var room = findRoomByNumber(r.room_number);
+          var ws = room ? room.workspaces.find(function (w) { return w.id === r.workspace_id; }) : null;
+          var actionLabel = r.action === "created" ? "Angelegt" : "Storniert";
+          var byWhom = escapeHtml(actor ? actor.full_name : "?") + (owner && actor && owner.id !== actor.id ? " (für " + escapeHtml(owner.full_name) + ")" : "");
+          var bd = parseISO(r.booking_date);
+          html += '<div class="admin-row" style="align-items:flex-start"><span>' + stamp + '<br><span style="color:var(--text-muted)">' + actionLabel + ' von ' + byWhom + '</span></span>';
+          html += '<span style="text-align:right">' + (room ? escapeHtml(room.label) : r.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + '<br><span style="color:var(--text-muted)">' + DOW[bd.getDay()] + ', ' + bd.getDate() + '. ' + MONTHS[bd.getMonth()] + ' · ' + PART_LABEL[r.part] + '</span></span></div>';
+        });
+      }
+    }
+    html += '</div>';
+
+    return html;
+  }
+
   function renderModal() {
     var m = state.modal; if (!m || m.type !== "book") return "";
     var html = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">';
@@ -997,6 +1088,7 @@
       btn.addEventListener("click", function () { state.tab = btn.getAttribute("data-tab"); render(); });
     });
     document.getElementById("adminLink").addEventListener("click", function () { state.tab = "admin"; render(); });
+    document.getElementById("reportsLink").addEventListener("click", function () { state.tab = "auswertung"; render(); });
 
     document.querySelectorAll(".date-chip").forEach(function (chip) {
       chip.addEventListener("click", function () { state.selectedDate = chip.getAttribute("data-date"); render(); });
@@ -1071,6 +1163,14 @@
       var newMap = {};
       document.querySelectorAll("[data-admin-toggle]").forEach(function (cb) { newMap[cb.getAttribute("data-admin-toggle")] = cb.checked; });
       saveAdminRights(newMap);
+    });
+    var runFreqBtn = document.getElementById("runFreqBtn");
+    if (runFreqBtn) runFreqBtn.addEventListener("click", function () {
+      runFrequencyReport(document.getElementById("freqFrom").value, document.getElementById("freqTo").value);
+    });
+    var runLogBtn = document.getElementById("runLogBtn");
+    if (runLogBtn) runLogBtn.addEventListener("click", function () {
+      runBookingLog(document.getElementById("logFrom").value, document.getElementById("logTo").value);
     });
 
     var backdrop = document.getElementById("modalBackdrop");
