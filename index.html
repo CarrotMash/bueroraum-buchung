@@ -579,16 +579,25 @@
   function renderBuchen() {
     var html = renderDateScroll();
     var dateISO = state.selectedDate;
+    var myPermWorkspaceIds = Object.keys(state.permanentAssignments).filter(function (wsId) { return state.permanentAssignments[wsId] === state.profile.id; });
+    var hasOwnPermanentDesk = myPermWorkspaceIds.length > 0;
+    var iAmOnVacationToday = state.vacations.some(function (v) { return v.user_id === state.profile.id && v.vacation_date === dateISO; });
     html += '<div class="legend"><span><i style="background:var(--free-border)"></i>frei</span><span><i style="background:var(--busy-border)"></i>belegt</span><span><i style="background:var(--permanent-border)"></i>dauerhaft belegt</span></div>';
+    if (hasOwnPermanentDesk && !iAmOnVacationToday) {
+      html += '<div class="banner">Dir ist ein fester Büroarbeitsplatz dauerhaft zugewiesen. Andere Arbeitsplätze kannst du daher nicht buchen.</div>';
+    }
 
     ROOMS.forEach(function (room) {
       html += '<div class="room-card"><h3>' + escapeHtml(room.label) + '</h3>';
       room.workspaces.forEach(function (ws) {
         var permState = workspacePermState(ws.id, dateISO);
+        var isMyPermanentWs = myPermWorkspaceIds.indexOf(ws.id) !== -1;
         html += '<div class="workspace-block"><div class="ws-label">' + escapeHtml(ws.label) + '</div><div class="ws-slots">';
         if (permState === "locked") {
           var owner = profileById(state.permanentAssignments[ws.id]);
           html += '<div class="slot-btn permanent full-span">Dauerhaft belegt<small>' + escapeHtml(owner ? owner.full_name : "?") + '</small></div>';
+        } else if (hasOwnPermanentDesk && !isMyPermanentWs && !iAmOnVacationToday) {
+          html += '<div class="slot-btn permanent full-span">Nicht buchbar<small>Dir ist bereits ein fester Arbeitsplatz zugewiesen</small></div>';
         } else {
           var amAvail = partAvailability(ws, dateISO, "AM");
           var pmAvail = partAvailability(ws, dateISO, "PM");
