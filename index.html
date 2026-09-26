@@ -102,7 +102,9 @@
   .slot-btn.busy { background: var(--busy); border-color: var(--busy-border); color: var(--busy-text); cursor: default; }
   .slot-btn.permanent { background: var(--permanent); border-color: var(--permanent-border); color: var(--permanent-text); cursor: default; }
   .slot-btn.locked { background: var(--locked); border-color: var(--locked-border); color: var(--locked-text); cursor: default; }
+  .slot-btn.ownconflict { background: var(--locked); border-color: var(--locked-border); color: var(--locked-text); cursor: default; }
   .slot-btn small { display: block; font-weight: 400; font-size: 10px; opacity: 0.85; }
+  .slot-btn .mini-cancel { display: block; margin: 4px auto 0; background: none; border: none; text-decoration: underline; font-size: 9.5px; font-weight: 700; color: var(--busy-text); cursor: pointer; padding: 0; }
 
   .legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--text-muted); margin: 4px 0 16px; }
   .legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -248,6 +250,34 @@
     return { status: "free", booking: null };
   }
 
+  // Finds a booking the current user already holds elsewhere that overlaps this date/part
+  // (same overlap rule as the database trigger: FULL conflicts with everything).
+  function myConflictingBooking(dateISO, part, excludeWorkspaceId) {
+    if (!state.profile) return null;
+    return state.bookings.find(function (b) {
+      if (b.user_id !== state.profile.id) return false;
+      if (b.booking_date !== dateISO) return false;
+      if (b.workspace_id === excludeWorkspaceId) return false;
+      return b.part === "FULL" || part === "FULL" || b.part === part;
+    }) || null;
+  }
+
+  function partAvailability(ws, dateISO, part) {
+    var s = slotStatus(ws.id, dateISO, part);
+    if (s.status === "busy") {
+      var owner = profileById(s.booking.user_id);
+      return { kind: "busy", note: owner ? owner.full_name : "belegt" };
+    }
+    var conflict = myConflictingBooking(dateISO, part, ws.id);
+    if (conflict) {
+      var croom = ROOMS.find(function (r) { return r.number === conflict.room_number; });
+      var cws = croom ? croom.workspaces.find(function (w) { return w.id === conflict.workspace_id; }) : null;
+      var where = (croom ? croom.label : conflict.room_number) + (cws ? " · " + cws.label : "");
+      return { kind: "own", note: where, conflictId: conflict.id };
+    }
+    return { kind: "free" };
+  }
+
   function workspacePermState(workspaceId, dateISO) {
     var ownerId = state.permanentAssignments[workspaceId];
     if (!ownerId) return null;
@@ -324,7 +354,16 @@
       user_id: state.profile.id, room_number: m.room.number, workspace_id: m.workspace.id,
       booking_date: m.dateISO, part: m.part
     }).then(function (res) {
-      if (res.error) { showToast("Buchung fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      if (res.error) {
+        var msg = /andere Buchung/i.test(res.error.message)
+          ? "Für diesen Zeitraum besteht bereits eine andere Buchung von dir. Bitte zuerst stornieren."
+          : "Buchung fehlgeschlagen: " + res.error.message;
+        showToast(msg);
+        console.error(res.error);
+        closeModal();
+        loadBookings();
+        return;
+      }
       showToast("Gebucht: " + m.room.label + " · " + m.workspace.label);
       closeModal();
       loadBookings();
@@ -524,12 +563,17 @@
     return html;
   }
 
-  function partButtonHtml(room, ws, part, isFree, unavailableNote) {
-    if (isFree) {
+  function partButtonHtml(room, ws, part, avail) {
+    if (avail.kind === "free") {
       var timeNote = PART_TIME[part] ? '<small>' + PART_TIME[part] + '</small>' : '';
       return '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + timeNote + '</button>';
     }
-    return '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(unavailableNote || "belegt") + '</small></div>';
+    if (avail.kind === "own") {
+      var html = '<div class="slot-btn ownconflict">' + PART_LABEL[part] + '<small>eigene Buchung: ' + escapeHtml(avail.note) + '</small>';
+      html += '<button type="button" class="mini-cancel" data-cancel-inline="' + avail.conflictId + '">zuerst stornieren</button></div>';
+      return html;
+    }
+    return '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(avail.note || "belegt") + '</small></div>';
   }
 
   function renderBuchen() {
@@ -546,14 +590,18 @@
           var owner = profileById(state.permanentAssignments[ws.id]);
           html += '<div class="slot-btn permanent full-span">Dauerhaft belegt<small>' + escapeHtml(owner ? owner.full_name : "?") + '</small></div>';
         } else {
-          var amStatus = slotStatus(ws.id, dateISO, "AM");
-          var pmStatus = slotStatus(ws.id, dateISO, "PM");
-          var amOwner = amStatus.status === "busy" ? profileById(amStatus.booking.user_id) : null;
-          var pmOwner = pmStatus.status === "busy" ? profileById(pmStatus.booking.user_id) : null;
-          var fullFree = amStatus.status === "free" && pmStatus.status === "free";
-          html += partButtonHtml(room, ws, "AM", amStatus.status === "free", amOwner ? amOwner.full_name : null);
-          html += partButtonHtml(room, ws, "PM", pmStatus.status === "free", pmOwner ? pmOwner.full_name : null);
-          html += partButtonHtml(room, ws, "FULL", fullFree, "nicht verfügbar");
+          var amAvail = partAvailability(ws, dateISO, "AM");
+          var pmAvail = partAvailability(ws, dateISO, "PM");
+          var fullAvail = partAvailability(ws, dateISO, "FULL");
+          // FULL also blocked if either half is taken by someone else, even without a dedicated FULL conflict.
+          if (fullAvail.kind === "free" && (amAvail.kind === "busy" || pmAvail.kind === "busy")) {
+            fullAvail = { kind: "busy", note: "nicht verfügbar" };
+          } else if (fullAvail.kind === "free" && (amAvail.kind === "own" || pmAvail.kind === "own")) {
+            fullAvail = amAvail.kind === "own" ? amAvail : pmAvail;
+          }
+          html += partButtonHtml(room, ws, "AM", amAvail);
+          html += partButtonHtml(room, ws, "PM", pmAvail);
+          html += partButtonHtml(room, ws, "FULL", fullAvail);
         }
         html += '</div>';
         if (permState === "released") {
@@ -701,6 +749,9 @@
       });
     });
     document.querySelectorAll("[data-cancel]").forEach(function (btn) { btn.addEventListener("click", function () { cancelBooking(btn.getAttribute("data-cancel")); }); });
+    document.querySelectorAll("[data-cancel-inline]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) { e.stopPropagation(); cancelBooking(btn.getAttribute("data-cancel-inline")); });
+    });
     document.querySelectorAll("[data-rmvac]").forEach(function (btn) { btn.addEventListener("click", function () { removeVacation(btn.getAttribute("data-rmvac")); }); });
 
     var addVacBtn = document.getElementById("addVacBtn");
