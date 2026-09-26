@@ -593,8 +593,10 @@
           var amAvail = partAvailability(ws, dateISO, "AM");
           var pmAvail = partAvailability(ws, dateISO, "PM");
           var fullAvail = partAvailability(ws, dateISO, "FULL");
-          // FULL also blocked if either half is taken by someone else, even without a dedicated FULL conflict.
-          if (fullAvail.kind === "free" && (amAvail.kind === "busy" || pmAvail.kind === "busy")) {
+          // Someone else holding AM or PM here always makes FULL impossible — this must win
+          // even if the base FULL check already resolved to "own" (a conflict elsewhere),
+          // because cancelling that own booking would not free up this workspace.
+          if (amAvail.kind === "busy" || pmAvail.kind === "busy") {
             fullAvail = { kind: "busy", note: "nicht verfügbar" };
           } else if (fullAvail.kind === "free" && (amAvail.kind === "own" || pmAvail.kind === "own")) {
             fullAvail = amAvail.kind === "own" ? amAvail : pmAvail;
