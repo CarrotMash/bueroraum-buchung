@@ -1098,6 +1098,10 @@
     document.querySelectorAll(".date-chip").forEach(function (chip) {
       chip.addEventListener("click", function () { state.selectedDate = chip.getAttribute("data-date"); render(); });
     });
+    // Nach jedem Rendern (z. B. nach Klick auf einen Tag) den ausgewählten Tag im Tagesstreifen
+    // sichtbar halten, statt dass der Streifen an den Anfang zurückspringt.
+    var activeDateChip = document.querySelector(".date-chip.active");
+    if (activeDateChip) activeDateChip.scrollIntoView({ inline: "nearest", block: "nearest" });
     document.querySelectorAll(".slot-btn.free").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var room = findRoomByNumber(btn.getAttribute("data-room"));
