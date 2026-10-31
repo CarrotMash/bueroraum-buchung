@@ -86,6 +86,14 @@
   .brand-text .subtitle { font-size: 11.5px; color: var(--text-muted); }
   .top-right { display: flex; align-items: center; gap: 8px; }
   .theme-btn { border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 11px; font-weight: 600; border-radius: 20px; padding: 6px 11px; cursor: pointer; white-space: nowrap; }
+  .brand-text .title, .brand-text .subtitle { white-space: nowrap; }
+  @media (max-width: 460px) {
+    .theme-btn { padding: 6px 9px; }
+    .top-row .theme-btn .theme-label { display: none; }
+    .top-row { padding-left: 14px; padding-right: 14px; }
+    .brand { gap: 8px; }
+  }
+  @media (max-width: 380px) { .brand .sep, .brand-text .subtitle { display: none; } }
   .user-chip { font-size: 12.5px; background: var(--name-accent-bg); color: var(--name-accent); padding: 6px 10px; border-radius: 20px; display: flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 40vw; overflow: hidden; }
   .user-chip span.uname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .user-chip button { background: none; border: none; color: var(--name-accent); opacity: 0.75; font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline; flex-shrink: 0; }
@@ -150,9 +158,12 @@
 
   .login-wrap { padding: 20px 22px 40px; max-width: 420px; margin: 0 auto; text-align: left; }
   .login-top-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
-  .login-illustration { width: 100%; max-width: 220px; height: auto; display: block; margin: 0 auto 6px; }
-  .login-wrap .logo-big { width: 110px; height: auto; display: block; margin: 0 auto 18px; }
-  .login-wrap .logo-big img { width: 100%; height: auto; display: block; }
+  .login-illustration { width: 100%; max-width: 270px; height: auto; display: block; margin: 0 auto 6px; }
+  .login-wrap .logo-big { width: 120px; height: auto; display: block; margin: 0 auto 16px; }
+  .login-wrap .logo-big img { width: 100%; height: auto; display: block; border-radius: 8px; }
+  /* Dunkelmodus: Logo auf weißem, abgerundetem Chip – analog VAK-Toolportal */
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .login-wrap .logo-big img { background: #fff; padding: 6px 10px; border-radius: 10px; } }
+  :root[data-theme="dark"] .login-wrap .logo-big img { background: #fff; padding: 6px 10px; border-radius: 10px; }
   .login-card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px 20px; }
   .login-wrap h2 { margin: 0 0 4px; font-size: 19px; color: var(--text); text-align: center; }
   .login-wrap p.intro { color: var(--text-muted); font-size: 13.5px; margin-top: 4px; text-align: center; }
@@ -201,8 +212,14 @@
   function sysDarkTheme() { return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches); }
   function isDarkTheme() { var t = document.documentElement.getAttribute("data-theme"); return t ? t === "dark" : sysDarkTheme(); }
   function applyThemeButtonLabel() {
-    var label = isDarkTheme() ? "\u2600\uFE0F Hell" : "\uD83C\uDF19 Dunkel";
-    document.querySelectorAll(".theme-btn").forEach(function (b) { b.textContent = label; });
+    var dark = isDarkTheme();
+    var icon = dark ? "\u2600\uFE0F" : "\uD83C\uDF19";
+    var text = dark ? "Hell" : "Dunkel";
+    document.querySelectorAll(".theme-btn").forEach(function (b) {
+      b.innerHTML = '<span aria-hidden="true">' + icon + '</span><span class="theme-label"> ' + text + '</span>';
+      b.setAttribute("title", dark ? "Zum hellen Modus wechseln" : "Zum dunklen Modus wechseln");
+      b.setAttribute("aria-label", dark ? "Zum hellen Modus wechseln" : "Zum dunklen Modus wechseln");
+    });
   }
   function toggleTheme() {
     var next = isDarkTheme() ? "light" : "dark";
@@ -714,24 +731,75 @@
   // Stilisierte Büroraum-Illustration für die Anmeldeseite; nutzt CSS-Variablen,
   // damit sie sich automatisch an das gewählte Farbschema (hell/dunkel) anpasst.
   var OFFICE_ILLUSTRATION =
-    '<svg class="login-illustration" viewBox="0 0 320 190" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Stilisierter Büroraum">' +
-      '<rect x="0" y="0" width="320" height="190" rx="18" style="fill:var(--name-accent-bg)"></rect>' +
-      '<rect x="0" y="150" width="320" height="40" style="fill:var(--border)" opacity="0.5"></rect>' +
-      '<rect x="206" y="20" width="92" height="66" rx="6" style="fill:var(--card-bg);stroke:var(--border);stroke-width:2"></rect>' +
-      '<line x1="252" y1="20" x2="252" y2="86" style="stroke:var(--border);stroke-width:2"></line>' +
-      '<line x1="206" y1="53" x2="298" y2="53" style="stroke:var(--border);stroke-width:2"></line>' +
-      '<rect x="40" y="120" width="140" height="10" rx="3" style="fill:var(--vak-blue-dark)"></rect>' +
-      '<rect x="50" y="130" width="8" height="30" style="fill:var(--vak-blue-dark)"></rect>' +
-      '<rect x="152" y="130" width="8" height="30" style="fill:var(--vak-blue-dark)"></rect>' +
-      '<rect x="68" y="88" width="56" height="36" rx="4" style="fill:var(--vak-blue)"></rect>' +
-      '<rect x="72" y="92" width="48" height="26" rx="2" style="fill:var(--card-bg)" opacity="0.9"></rect>' +
-      '<polyline points="78,110 88,100 98,106 110,94" style="fill:none;stroke:var(--free-border);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round"></polyline>' +
-      '<rect x="90" y="124" width="12" height="10" style="fill:var(--vak-blue-dark)"></rect>' +
-      '<path d="M10 160 L10 128 Q10 118 24 118 L40 118 Q54 118 54 128 L54 160 Z" style="fill:var(--text-muted)" opacity="0.55"></path>' +
-      '<rect x="14" y="160" width="36" height="8" rx="2" style="fill:var(--text-muted)" opacity="0.55"></rect>' +
-      '<rect x="252" y="140" width="24" height="20" rx="3" style="fill:var(--vak-red)"></rect>' +
-      '<path d="M254 140 Q258 110 264 140 Q270 108 278 140 Z" style="fill:var(--free-border)"></path>' +
-    '</svg>';
+    '<svg class="login-illustration" viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Stilisierter Büroraum">' +
+    '<defs><clipPath id="officeClip"><rect width="320" height="200" rx="18"/></clipPath><linearGradient id="officeLight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8" stop-opacity="0.45"/><stop offset="1" stop-color="#ffe9a8" stop-opacity="0"/></linearGradient></defs>' +
+    '<g clip-path="url(#officeClip)">' +
+    '<rect width="320" height="200" style="fill:var(--name-accent-bg)"/>' +
+    '<rect y="164" width="320" height="36" style="fill:var(--border)" opacity="0.7"/>' +
+    '<rect y="162" width="320" height="3" style="fill:var(--border)"/>' +
+    '<rect x="22" y="24" width="84" height="70" rx="5" style="fill:var(--card-bg);stroke:var(--border);stroke-width:3"/>' +
+    '<rect x="26" y="28" width="76" height="62" rx="2" style="fill:var(--vak-blue-light)" opacity="0.28"/>' +
+    '<circle cx="86" cy="44" r="7" style="fill:#f2c94c"/>' +
+    '<ellipse cx="44" cy="74" rx="11" ry="5" style="fill:var(--card-bg)" opacity="0.9"/>' +
+    '<ellipse cx="53" cy="71" rx="8" ry="5" style="fill:var(--card-bg)" opacity="0.9"/>' +
+    '<line x1="64" y1="28" x2="64" y2="90" style="stroke:var(--card-bg);stroke-width:3"/>' +
+    '<line x1="26" y1="59" x2="102" y2="59" style="stroke:var(--card-bg);stroke-width:3"/>' +
+    '<rect x="18" y="93" width="92" height="5" rx="2" style="fill:var(--card-bg);stroke:var(--border);stroke-width:1.5"/>' +
+    '<rect x="236" y="26" width="58" height="52" rx="5" style="fill:var(--card-bg);stroke:var(--border);stroke-width:1.5"/>' +
+    '<path d="M236 38 V31 a5 5 0 0 1 5 -5 h48 a5 5 0 0 1 5 5 V38 Z" style="fill:var(--vak-red)"/>' +
+    '<rect x="242" y="44" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="254" y="44" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="266" y="44" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="278" y="44" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="242" y="54" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="254" y="54" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="266" y="54" width="9" height="7" rx="1.5" style="fill:var(--free-border)"/>' +
+    '<rect x="278" y="54" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="242" y="64" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="254" y="64" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="266" y="64" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<rect x="278" y="64" width="9" height="7" rx="1.5" style="fill:var(--border)"/>' +
+    '<path d="M162 34 L214 34 L246 162 L130 162 Z" fill="url(#officeLight)"/>' +
+    '<line x1="188" y1="0" x2="188" y2="22" style="stroke:var(--text-muted);stroke-width:1.5"/>' +
+    '<path d="M174 34 L202 34 L195 21 L181 21 Z" style="fill:var(--vak-blue)"/><circle cx="188" cy="35" r="3.5" style="fill:#f2c94c"/>' +
+    '<ellipse cx="190" cy="178" rx="84" ry="4" style="fill:var(--text)" opacity="0.08"/>' +
+    '<ellipse cx="102" cy="176" rx="22" ry="3" style="fill:var(--text)" opacity="0.08"/>' +
+    '<ellipse cx="290" cy="177" rx="18" ry="3" style="fill:var(--text)" opacity="0.08"/>' +
+    '<rect x="118" y="131" width="6" height="45" style="fill:var(--vak-blue-dark)"/>' +
+    '<rect x="222" y="131" width="38" height="45" rx="2" style="fill:var(--vak-blue)"/>' +
+    '<line x1="222" y1="146" x2="260" y2="146" style="stroke:var(--card-bg);stroke-width:1.5" opacity="0.5"/>' +
+    '<line x1="222" y1="161" x2="260" y2="161" style="stroke:var(--card-bg);stroke-width:1.5" opacity="0.5"/>' +
+    '<rect x="236" y="137" width="10" height="2.5" rx="1" style="fill:var(--card-bg)" opacity="0.7"/>' +
+    '<rect x="236" y="152" width="10" height="2.5" rx="1" style="fill:var(--card-bg)" opacity="0.7"/>' +
+    '<rect x="236" y="167" width="10" height="2.5" rx="1" style="fill:var(--card-bg)" opacity="0.7"/>' +
+    '<rect x="112" y="124" width="152" height="7" rx="2" style="fill:var(--vak-blue-dark)"/>' +
+    '<rect x="140" y="78" width="68" height="40" rx="4" style="fill:var(--vak-blue-dark)"/>' +
+    '<rect x="144" y="82" width="60" height="31" rx="2" style="fill:var(--card-bg)"/>' +
+    '<rect x="150" y="101" width="6" height="8" rx="1" style="fill:var(--vak-blue)" opacity="0.75"/>' +
+    '<rect x="159" y="95" width="6" height="14" rx="1" style="fill:var(--vak-blue)" opacity="0.75"/>' +
+    '<rect x="168" y="99" width="6" height="10" rx="1" style="fill:var(--vak-blue)" opacity="0.75"/>' +
+    '<polyline points="179,104 187,96 193,100 199,89" style="fill:none;stroke:var(--free-border);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round"/>' +
+    '<rect x="170" y="118" width="8" height="4" style="fill:var(--vak-blue-dark)"/>' +
+    '<rect x="160" y="121" width="28" height="3" rx="1.5" style="fill:var(--vak-blue-dark)"/>' +
+    '<rect x="122" y="118" width="20" height="3" rx="1" style="fill:var(--card-bg);stroke:var(--border);stroke-width:1"/>' +
+    '<rect x="124" y="121" width="20" height="3" rx="1" style="fill:var(--card-bg);stroke:var(--border);stroke-width:1"/>' +
+    '<rect x="230" y="112" width="11" height="12" rx="2" style="fill:var(--vak-red)"/>' +
+    '<path d="M241 115 a3.5 3.5 0 0 1 0 6" style="fill:none;stroke:var(--vak-red);stroke-width:2"/>' +
+    '<rect x="82" y="102" width="30" height="36" rx="9" style="fill:var(--text-muted)" opacity="0.75"/>' +
+    '<rect x="95" y="136" width="5" height="6" style="fill:var(--text-muted)"/>' +
+    '<rect x="78" y="140" width="46" height="8" rx="4" style="fill:var(--text-muted)"/>' +
+    '<rect x="99" y="148" width="5" height="17" style="fill:var(--text-muted)"/>' +
+    '<rect x="84" y="164" width="36" height="3.5" rx="1.75" style="fill:var(--text-muted)"/>' +
+    '<circle cx="87" cy="171" r="3" style="fill:var(--text-muted)"/>' +
+    '<circle cx="102" cy="171" r="3" style="fill:var(--text-muted)"/>' +
+    '<circle cx="117" cy="171" r="3" style="fill:var(--text-muted)"/>' +
+    '<ellipse cx="290" cy="128" rx="5" ry="18" style="fill:var(--free-border)"/>' +
+    '<ellipse cx="280" cy="136" rx="4.5" ry="14" transform="rotate(-32 280 136)" style="fill:var(--free-text)" opacity="0.85"/>' +
+    '<ellipse cx="300" cy="136" rx="4.5" ry="14" transform="rotate(32 300 136)" style="fill:var(--free-text)" opacity="0.85"/>' +
+    '<ellipse cx="284" cy="124" rx="3.5" ry="11" transform="rotate(-14 284 124)" style="fill:var(--free-border)" opacity="0.9"/>' +
+    '<rect x="275" y="146" width="30" height="6" rx="2" style="fill:var(--vak-red)"/>' +
+    '<path d="M278 152 L302 152 L298 176 L282 176 Z" style="fill:var(--vak-red)" opacity="0.85"/>' +
+    '</g></svg>';
 
   function renderLogin() {
     var isRegister = state.authMode === "register";
