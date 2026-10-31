@@ -93,7 +93,20 @@
     .top-row { padding-left: 14px; padding-right: 14px; }
     .brand { gap: 8px; }
   }
-  @media (max-width: 380px) { .brand .sep, .brand-text .subtitle { display: none; } }
+  .brand-text .sub-short, .user-chip .un-short { display: none; }
+  /* Wenig Platz: Kurzbezeichnung "VAK SH" statt "VAK Schleswig-Holstein" */
+  @media (max-width: 560px) {
+    .brand-text .sub-long { display: none; }
+    .brand-text .sub-short { display: inline; }
+    .user-chip .un-long { display: none; }
+    .user-chip .un-short { display: inline; }
+    .user-chip { max-width: 34vw; padding: 6px 9px; }
+  }
+  @media (max-width: 360px) { .brand .sep { display: none; } .brand .logo-badge { width: 34px; height: 34px; } }
+  .brand, .top-right { min-width: 0; }
+  .brand-text { min-width: 0; }
+  .top-right { flex-shrink: 1; }
+  .brand { flex-shrink: 0; }
   .user-chip { font-size: 12.5px; background: var(--name-accent-bg); color: var(--name-accent); padding: 6px 10px; border-radius: 20px; display: flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 40vw; overflow: hidden; }
   .user-chip span.uname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .user-chip button { background: none; border: none; color: var(--name-accent); opacity: 0.75; font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline; flex-shrink: 0; }
@@ -875,8 +888,8 @@
     var user = state.profile;
     var html = '<header class="topbar">';
     html += '<div class="top-row">';
-    html += '<div class="brand"><div class="logo-badge"><img src="' + VAK_LOGO_SRC + '" alt="VAK"></div><div class="sep"></div><div class="brand-text"><div class="title">Büro-Buchung</div><div class="subtitle">VAK Schleswig-Holstein</div></div></div>';
-    html += '<div class="top-right"><button type="button" class="theme-btn" id="themeBtn"></button><div class="user-chip"><span class="uname">' + escapeHtml(user ? user.full_name : "") + '</span><button id="logoutBtn">abmelden</button></div></div>';
+    html += '<div class="brand"><div class="logo-badge"><img src="' + VAK_LOGO_SRC + '" alt="VAK"></div><div class="sep"></div><div class="brand-text"><div class="title">Büro-Buchung</div><div class="subtitle"><span class="sub-long">VAK Schleswig-Holstein</span><span class="sub-short">VAK SH</span></div></div></div>';
+    html += '<div class="top-right"><button type="button" class="theme-btn" id="themeBtn"></button><div class="user-chip"><span class="uname" title="' + escapeHtml(user ? user.full_name : "") + '"><span class="un-long">' + escapeHtml(user ? user.full_name : "") + '</span><span class="un-short">' + escapeHtml(user && user.full_name ? user.full_name.trim().split(/\s+/)[0] : "") + '</span></span><button id="logoutBtn">abmelden</button></div></div>';
     html += '</div>';
     html += '<div class="tabs-band"><nav class="tabs">';
     html += '<button data-tab="buchen" class="' + (state.tab === "buchen" ? "active" : "") + '">Buchen</button>';
