@@ -1622,10 +1622,9 @@
       });
       var selS = document.getElementById("slotStart"), selE = document.getElementById("slotEnd");
       if (selS) selS.addEventListener("change", function () {
-        var dur = state.modal.end - state.modal.start;
         state.modal.start = parseInt(selS.value, 10);
-        // Dauer beibehalten, solange es passt
-        if (dur > 0) state.modal.end = Math.min(DAY_END, state.modal.start + dur);
+        // Endzeit bleibt unverändert; nur wenn der Beginn nicht mehr davor liegt, Ende = Beginn + 1 Std.
+        if (state.modal.end <= state.modal.start) state.modal.end = Math.min(DAY_END, state.modal.start + 60);
         render();
       });
       if (selE) selE.addEventListener("change", function () { state.modal.end = parseInt(selE.value, 10); render(); });
