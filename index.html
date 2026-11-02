@@ -586,7 +586,9 @@
     if (state.authMode === "register") {
       supabaseClient.auth.signUp({
         email: email, password: password,
-        options: { data: { full_name: fullName, group_id: groupId } }
+        // Nach Klick auf den Bestätigungslink zurück genau auf diese App-Seite leiten
+        // (nicht auf die Domain-Wurzel, dort gibt es keine Seite → 404)
+        options: { data: { full_name: fullName, group_id: groupId }, emailRedirectTo: window.location.origin + window.location.pathname }
       }).then(function (res) {
         state.authBusy = false;
         if (res.error) {
