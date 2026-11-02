@@ -20,3 +20,7 @@ alter table public.profiles
       and favorite_end - favorite_start <= interval '10 hours 30 minutes'
     )
   );
+
+-- Ergänzung: Lieblingsarbeitsplatz je Person (wird beim Löschen des Platzes geleert)
+alter table public.profiles
+  add column favorite_workspace_id text references public.workspaces(id) on delete set null;

@@ -163,6 +163,16 @@
   .fav-line { font-size: 12px; color: var(--text-muted); margin: -2px 0 10px; }
   .fav-line .link-btn { background: none; border: none; padding: 0; color: var(--name-accent); font-weight: 700; font-size: 12px; text-decoration: underline; cursor: pointer; }
   .fav-card h3 { margin-bottom: 6px; }
+  .fav-quick { border-color: var(--permanent-border); }
+  .fq-title { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--permanent-text); }
+  .fq-place { font-size: 15px; font-weight: 700; margin: 2px 0 6px; }
+  .fq-note { font-size: 12.5px; margin-bottom: 10px; }
+  .fq-note.ok { color: var(--free-text); }
+  .fq-note.bad { color: var(--busy-text); }
+  .fq-actions { display: flex; gap: 8px; }
+  .fq-actions .btn-primary { flex: 2; }
+  .fq-actions .btn-secondary { flex: 1; }
+  .fav-star { color: var(--permanent-border); }
   .preset-chip { border: 1.5px solid var(--border); background: var(--card-bg); color: var(--text); border-radius: 10px; padding: 7px 4px; font-size: 12px; font-weight: 700; cursor: pointer; line-height: 1.2; }
   .preset-chip small { display: block; font-weight: 400; font-size: 10.5px; color: var(--text-muted); }
   .preset-chip.active { border-color: var(--vak-blue); background: var(--name-accent-bg); color: var(--name-accent); }
@@ -336,20 +346,37 @@
     var f = myFavorite();
     return f ? [f].concat(PRESETS) : PRESETS;
   }
-  function saveFavorite(start, end) {
-    var payload = start == null ? { favorite_start: null, favorite_end: null } : { favorite_start: fmtMin(start), favorite_end: fmtMin(end) };
-    supabaseClient.from("profiles").update(payload).eq("id", state.profile.id).select("id").then(function (res) {
+  // Lieblingsplatz (nur Plätze der eigenen Gruppe)
+  function myFavoriteWorkspace() {
+    var pr = state.profile;
+    if (!pr || !pr.favorite_workspace_id) return null;
+    var hit = null;
+    roomsForGroup(pr.group_id).forEach(function (room) {
+      room.workspaces.forEach(function (ws) { if (ws.id === pr.favorite_workspace_id) hit = { room: room, ws: ws }; });
+    });
+    return hit;
+  }
+  // Speichert Favoriten-Felder im eigenen Profil (fields: favorite_start/_end/_workspace_id)
+  function saveFavorites(fields, okMsg) {
+    supabaseClient.from("profiles").update(fields).eq("id", state.profile.id).select("id").then(function (res) {
       if (res.error || !res.data || !res.data.length) {
         showToast("Favorit konnte nicht gespeichert werden.");
         if (res.error) console.error(res.error);
         return;
       }
-      var f = start == null ? null : fmtMin(start) + ":00", t = start == null ? null : fmtMin(end) + ":00";
-      state.profile.favorite_start = f; state.profile.favorite_end = t;
-      var other = profileById(state.profile.id);
-      if (other && other !== state.profile) { other.favorite_start = f; other.favorite_end = t; }
-      showToast(start == null ? "Favorit entfernt." : "Favorit gespeichert: " + rangeLabel(start, end));
+      [state.profile, profileById(state.profile.id)].forEach(function (pr) {
+        if (!pr) return;
+        Object.keys(fields).forEach(function (k) {
+          var v = fields[k];
+          pr[k] = (v && (k === "favorite_start" || k === "favorite_end")) ? v + ":00" : v;
+        });
+      });
+      showToast(okMsg);
     });
+  }
+  function saveFavorite(start, end) {
+    if (start == null) saveFavorites({ favorite_start: null, favorite_end: null }, "Lieblingszeit entfernt.");
+    else saveFavorites({ favorite_start: fmtMin(start), favorite_end: fmtMin(end) }, "Lieblingszeit gespeichert: " + rangeLabel(start, end));
   }
 
   // Nur noch für alte Protokolleinträge ohne Uhrzeit
@@ -576,8 +603,8 @@
 
   // ---------- booking actions ----------
 
-  function openBookingModal(room, workspace, dateISO, preferStart) {
-    var sug = suggestSlot(workspace.id, dateISO, preferStart);
+  function openBookingModal(room, workspace, dateISO, preferStart, fixed) {
+    var sug = fixed || suggestSlot(workspace.id, dateISO, preferStart);
     if (!sug) { showToast("Dieser Platz ist an diesem Tag nicht mehr frei."); return; }
     state.modal = { type: "book", room: room, workspace: workspace, dateISO: dateISO, start: sug.start, end: sug.end, busy: false };
     render();
@@ -873,7 +900,7 @@
   // ---------- data loading ----------
 
   function loadProfiles() {
-    return supabaseClient.from("profiles").select("id, full_name, is_admin, group_id, is_active, favorite_start, favorite_end").then(function (res) {
+    return supabaseClient.from("profiles").select("id, full_name, is_admin, group_id, is_active, favorite_start, favorite_end, favorite_workspace_id").then(function (res) {
       if (!res.error) state.profiles = res.data || [];
     });
   }
@@ -1197,6 +1224,35 @@
       html += '<div class="banner">Dir ist ein fester Büroarbeitsplatz dauerhaft zugewiesen. Andere Arbeitsplätze kannst du daher nicht buchen.</div>';
     }
 
+    var favWs = hasOwnPermanentDesk ? null : myFavoriteWorkspace();
+    if (favWs) {
+      var favT = myFavorite();
+      var favPerm = workspacePermState(favWs.ws.id, dateISO);
+      html += '<div class="card fav-quick"><div class="fq-title">★ Mein Lieblingsplatz</div><div class="fq-place">' + escapeHtml(favWs.room.label + ' · ' + favWs.ws.label) + '</div>';
+      var myAtFav = workspaceBookings(favWs.ws.id, dateISO).filter(function (x) { return x.user_id === state.profile.id; });
+      if (myAtFav.length) {
+        html += '<div class="fq-note ok">✓ Gebucht: ' + myAtFav.map(function (x) { return rangeLabel(bStart(x), bEnd(x)); }).join(', ') + '</div>';
+        html += '<div class="fq-actions"><button class="btn-secondary" data-edit="' + myAtFav[0].id + '">Anpassen</button></div>';
+      } else if (iAmOnVacationToday) {
+        html += '<div class="fq-note">An diesem Tag hast du Urlaub eingetragen.</div>';
+      } else if (favPerm === "locked") {
+        html += '<div class="fq-note bad">Dieser Platz ist dauerhaft vergeben und heute nicht freigegeben.</div>';
+      } else if (favT) {
+        var fErr = validateSlot(favWs.ws.id, dateISO, favT.start, favT.end);
+        if (!fErr.length) {
+          html += '<div class="fq-note ok">' + rangeLabel(favT.start, favT.end) + ' ist frei.</div>';
+          html += '<div class="fq-actions"><button class="btn-primary" data-favbook="1">' + fmtMin(favT.start) + '–' + fmtMin(favT.end) + ' Uhr buchen</button><button class="btn-secondary" data-favother="1">Andere Zeit</button></div>';
+        } else {
+          html += '<div class="fq-note bad">Deine Lieblingszeit ' + rangeLabel(favT.start, favT.end) + ' passt heute nicht: ' + escapeHtml(fErr[0]) + '</div>';
+          if (freeIntervals(favWs.ws.id, dateISO).length) html += '<div class="fq-actions"><button class="btn-secondary" data-favother="1">Freie Zeit an diesem Platz wählen</button></div>';
+        }
+      } else {
+        if (freeIntervals(favWs.ws.id, dateISO).length) html += '<div class="fq-actions"><button class="btn-primary" data-favother="1">Zeitraum wählen &amp; buchen</button></div>';
+        else html += '<div class="fq-note bad">An diesem Tag ist kein Zeitfenster mehr frei.</div>';
+      }
+      html += '</div>';
+    }
+
     var myRooms = roomsForGroup(state.profile.group_id);
     if (!myRooms.length) {
       html += '<div class="empty-state">Für deine Gruppe sind aktuell keine Räume hinterlegt.</div>';
@@ -1206,7 +1262,8 @@
       room.workspaces.forEach(function (ws) {
         var permState = workspacePermState(ws.id, dateISO);
         var isMyPermanentWs = myPermWorkspaceIds.indexOf(ws.id) !== -1;
-        html += '<div class="workspace-block"><div class="ws-label">' + escapeHtml(ws.label) + '</div><div class="ws-slots">';
+        var isFavWs = state.profile.favorite_workspace_id === ws.id;
+        html += '<div class="workspace-block"><div class="ws-label">' + (isFavWs ? '<span class="fav-star" title="Lieblingsplatz">★</span> ' : '') + escapeHtml(ws.label) + '</div><div class="ws-slots">';
         if (hasOwnPermanentDesk && (!isMyPermanentWs || iAmOnVacationToday)) {
           html += '<div class="slot-btn permanent full-span">Nicht buchbar</div>';
         } else if (permState === "locked") {
@@ -1234,13 +1291,23 @@
   function renderMeine() {
     var mine = state.bookings.filter(function (b) { return b.user_id === state.profile.id; }).sort(function (a, b) { return a.booking_date.localeCompare(b.booking_date) || byStart(a, b); });
     var fav = myFavorite();
-    var html = '<div class="card fav-card"><h3>★ Meine Lieblingszeit</h3>';
-    if (fav) {
-      html += '<div class="booking-item"><div><div class="booking-main">' + rangeLabel(fav.start, fav.end) + '</div><div class="booking-sub">Wird beim Buchen zuerst vorgeschlagen (' + durationLabel(fav.end - fav.start) + ').</div></div>';
-      html += '<button class="btn-edit" id="favRemoveMeine">Entfernen</button></div>';
-    } else {
-      html += '<div class="booking-sub">Noch keine hinterlegt. Im Buchungsdialog die gewünschte Zeit wählen und „als Favorit speichern“ antippen – dann wird sie künftig automatisch vorgeschlagen.</div>';
-    }
+    var fws = myFavoriteWorkspace();
+    var html = '<div class="card fav-card"><h3>★ Meine Favoriten</h3>';
+    html += '<div class="booking-sub" style="margin-bottom:10px">Lieblingsplatz und Lieblingszeit werden beim Buchen vorgeschlagen; oben in „Buchen“ erscheint dafür eine Schnellbuchung.</div>';
+    html += '<label for="favWs">Lieblingsplatz</label><select id="favWs"><option value="">– kein Lieblingsplatz –</option>';
+    roomsForGroup(state.profile.group_id).forEach(function (room) {
+      room.workspaces.forEach(function (ws) {
+        var lockedForOthers = state.permanentAssignments[ws.id] && state.permanentAssignments[ws.id] !== state.profile.id;
+        html += '<option value="' + escapeHtml(ws.id) + '"' + (fws && fws.ws.id === ws.id ? ' selected' : '') + '>' + escapeHtml(room.label + ' · ' + ws.label) + (lockedForOthers ? ' (dauerhaft vergeben)' : '') + '</option>';
+      });
+    });
+    html += '</select>';
+    html += '<div class="time-row" style="margin-top:12px"><div><label for="favFrom">Lieblingszeit von</label><select id="favFrom"><option value="">–</option>';
+    for (var ft = DAY_START; ft < DAY_END; ft += STEP_MIN) html += '<option value="' + ft + '"' + (fav && fav.start === ft ? ' selected' : '') + '>' + fmtMin(ft) + ' Uhr</option>';
+    html += '</select></div><div><label for="favTo">bis</label><select id="favTo"><option value="">–</option>';
+    for (var fu = DAY_START + STEP_MIN; fu <= DAY_END; fu += STEP_MIN) html += '<option value="' + fu + '"' + (fav && fav.end === fu ? ' selected' : '') + '>' + fmtMin(fu) + ' Uhr</option>';
+    html += '</select></div></div>';
+    html += '<div class="modal-actions"><button class="btn-secondary" id="favClearAll"' + (!fav && !fws ? ' disabled' : '') + '>Entfernen</button><button class="btn-primary" id="favSaveAll">Favoriten speichern</button></div>';
     html += '</div>';
     html += '<div class="card"><h3>Meine Buchungen</h3>';
     if (!mine.length) { html += '<div class="empty-state">Noch keine Buchungen vorhanden.</div>'; }
@@ -1645,8 +1712,31 @@
       document.querySelectorAll("[data-admin-toggle]").forEach(function (cb) { newMap[cb.getAttribute("data-admin-toggle")] = cb.checked; });
       saveAdminRights(newMap);
     });
-    var favRemoveMeine = document.getElementById("favRemoveMeine");
-    if (favRemoveMeine) favRemoveMeine.addEventListener("click", function () { saveFavorite(null, null); });
+    var favSaveAll = document.getElementById("favSaveAll");
+    if (favSaveAll) favSaveAll.addEventListener("click", function () {
+      var wsVal = document.getElementById("favWs").value || null;
+      var fromV = document.getElementById("favFrom").value, toV = document.getElementById("favTo").value;
+      if ((fromV === "") !== (toV === "")) { showToast("Bitte Beginn und Ende der Lieblingszeit wählen – oder beide leer lassen."); return; }
+      var fields = { favorite_workspace_id: wsVal };
+      if (fromV === "") { fields.favorite_start = null; fields.favorite_end = null; }
+      else {
+        var fs = parseInt(fromV, 10), fe = parseInt(toV, 10);
+        if (fe <= fs) { showToast("Das Ende muss nach dem Beginn liegen."); return; }
+        if (fe - fs > MAX_DURATION) { showToast("Die Lieblingszeit darf höchstens 10,5 Stunden umfassen."); return; }
+        fields.favorite_start = fmtMin(fs); fields.favorite_end = fmtMin(fe);
+      }
+      saveFavorites(fields, "Favoriten gespeichert.");
+    });
+    var favClearAll = document.getElementById("favClearAll");
+    if (favClearAll) favClearAll.addEventListener("click", function () {
+      saveFavorites({ favorite_workspace_id: null, favorite_start: null, favorite_end: null }, "Favoriten entfernt.");
+    });
+    var favBook = document.querySelector("[data-favbook]"), favOther = document.querySelector("[data-favother]");
+    if (favBook || favOther) {
+      var fw = myFavoriteWorkspace();
+      if (favBook) favBook.addEventListener("click", function () { var t = myFavorite(); openBookingModal(fw.room, fw.ws, state.selectedDate, null, { start: t.start, end: t.end }); });
+      if (favOther) favOther.addEventListener("click", function () { openBookingModal(fw.room, fw.ws, state.selectedDate, null); });
+    }
     var runFreqBtn = document.getElementById("runFreqBtn");
     if (runFreqBtn) runFreqBtn.addEventListener("click", function () {
       runFrequencyReport(document.getElementById("freqFrom").value, document.getElementById("freqTo").value);
