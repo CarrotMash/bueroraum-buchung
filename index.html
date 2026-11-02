@@ -1368,7 +1368,10 @@
           var room = findRoomByNumber(r.room_number);
           var ws = room ? room.workspaces.find(function (w) { return w.id === r.workspace_id; }) : null;
           var actionLabel = r.action === "created" ? "Angelegt" : "Storniert";
-          var byWhom = escapeHtml(actor ? actor.full_name : "?") + (owner && actor && owner.id !== actor.id ? " (für " + escapeHtml(owner.full_name) + ")" : "");
+          // Gelöschte Konten erscheinen im Protokoll ohne Namen (Verweis wird beim Löschen entfernt)
+          var byWhom = escapeHtml(actor ? actor.full_name : "gelöschtes Konto");
+          if (owner && (!actor || owner.id !== actor.id)) byWhom += " (für " + escapeHtml(owner.full_name) + ")";
+          else if (actor && !owner) byWhom += " (für gelöschtes Konto)";
           var bd = parseISO(r.booking_date);
           html += '<div class="admin-row" style="align-items:flex-start"><span>' + stamp + '<br><span style="color:var(--text-muted)">' + actionLabel + ' von ' + byWhom + '</span></span>';
           html += '<span style="text-align:right">' + (room ? escapeHtml(room.label) : r.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + '<br><span style="color:var(--text-muted)">' + DOW[bd.getDay()] + ', ' + bd.getDate() + '. ' + MONTHS[bd.getMonth()] + ' · ' + escapeHtml(bookingTimeLabel(r)) + '</span></span></div>';
