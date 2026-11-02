@@ -237,6 +237,7 @@
   .login-wrap h2 { margin: 0 0 4px; font-size: 19px; color: var(--text); text-align: center; }
   .login-wrap p.intro { color: var(--text-muted); font-size: 13.5px; margin-top: 4px; text-align: center; }
   .auth-field { margin-bottom: 14px; }
+  .name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .auth-error { background: var(--busy); color: var(--busy-text); border-radius: 9px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 14px; }
   .auth-info { background: var(--free); color: var(--free-text); border-radius: 9px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 14px; }
   .auth-switch { text-align: center; margin-top: 16px; font-size: 12.5px; color: var(--text-muted); }
@@ -403,6 +404,8 @@
     modal: null,
     toastMsg: null,
     authMode: "login",      // 'login' | 'register'
+    authDraft: { firstName: "", lastName: "", groupId: "", email: "", password: "" }, // Eingaben bleiben bei Fehlern erhalten
+    authFocus: null,
     authError: null,
     authInfo: null,
     authBusy: false,
@@ -553,10 +556,30 @@
 
   // ---------- auth ----------
 
+  // Gleiche Vorgaben wie in Supabase eingestellt: mind. 8 Zeichen, Klein-/Großbuchstabe, Zahl, Sonderzeichen
+  function passwordProblems(pw) {
+    var miss = [];
+    if (pw.length < 8) miss.push("mindestens 8 Zeichen");
+    if (!/[a-zäöüß]/.test(pw)) miss.push("einen Kleinbuchstaben");
+    if (!/[A-ZÄÖÜ]/.test(pw)) miss.push("einen Großbuchstaben");
+    if (!/[0-9]/.test(pw)) miss.push("eine Zahl");
+    if (!/[^A-Za-z0-9äöüÄÖÜß]/.test(pw)) miss.push("ein Sonderzeichen");
+    return miss;
+  }
+  function clearPasswordAndFocus() { state.authDraft.password = ""; state.authFocus = "authPassword"; }
+
   function handleAuthSubmit(email, password, fullName, groupId) {
     state.authError = null; state.authInfo = null;
     if (!email || !password || (state.authMode === "register" && (!fullName || !groupId))) {
-      state.authError = "Bitte alle Felder ausfüllen."; render(); return;
+      state.authError = state.authMode === "register" ? "Bitte Vorname, Nachname, Gruppe, E-Mail und Passwort ausfüllen." : "Bitte E-Mail und Passwort eingeben.";
+      render(); return;
+    }
+    if (state.authMode === "register") {
+      var miss = passwordProblems(password);
+      if (miss.length) {
+        state.authError = "Das Passwort braucht noch: " + miss.join(", ") + ".";
+        clearPasswordAndFocus(); render(); return;
+      }
     }
     state.authBusy = true; render();
 
@@ -566,7 +589,12 @@
         options: { data: { full_name: fullName, group_id: groupId } }
       }).then(function (res) {
         state.authBusy = false;
-        if (res.error) { state.authError = translateAuthError(res.error.message); render(); return; }
+        if (res.error) {
+          state.authError = translateAuthError(res.error.message);
+          if (/password/i.test(res.error.message)) clearPasswordAndFocus();
+          render(); return;
+        }
+        state.authDraft.password = "";
         if (res.data.session) {
           state.session = res.data.session;
           afterLogin();
@@ -579,7 +607,8 @@
     } else {
       supabaseClient.auth.signInWithPassword({ email: email, password: password }).then(function (res) {
         state.authBusy = false;
-        if (res.error) { state.authError = translateAuthError(res.error.message); render(); return; }
+        if (res.error) { state.authError = translateAuthError(res.error.message); clearPasswordAndFocus(); render(); return; }
+        state.authDraft = { firstName: "", lastName: "", groupId: "", email: "", password: "" };
         state.session = res.data.session;
         afterLogin();
       }).catch(function (e) { state.authBusy = false; state.authError = "Anmeldung fehlgeschlagen."; render(); console.error(e); });
@@ -1077,15 +1106,17 @@
     html += '<p class="intro">' + (isRegister ? "Neues Konto anlegen" : "Bitte anmelden, um deinen Büroarbeitsplatz zu buchen.") + '</p>';
     if (state.authError) html += '<div class="auth-error">' + escapeHtml(state.authError) + '</div>';
     if (state.authInfo) html += '<div class="auth-info">' + escapeHtml(state.authInfo) + '</div>';
-    html += '<form id="authForm">';
+    var dr = state.authDraft;
+    html += '<form id="authForm" novalidate>';
     if (isRegister) {
-      html += '<div class="auth-field"><label for="fullName">Name</label><input type="text" id="fullName" autocomplete="name" placeholder="Vorname Nachname"></div>';
+      html += '<div class="name-row"><div class="auth-field"><label for="firstName">Vorname</label><input type="text" id="firstName" autocomplete="given-name" placeholder="z. B. Erika" value="' + escapeHtml(dr.firstName) + '"></div>';
+      html += '<div class="auth-field"><label for="lastName">Nachname</label><input type="text" id="lastName" autocomplete="family-name" placeholder="z. B. Mustermann" value="' + escapeHtml(dr.lastName) + '"></div></div>';
       html += '<div class="auth-field"><label for="regGroup">Gruppe</label><select id="regGroup"><option value="">– bitte wählen –</option>';
-      state.groups.forEach(function (g) { html += '<option value="' + g.id + '">' + escapeHtml(g.name) + '</option>'; });
+      state.groups.forEach(function (g) { html += '<option value="' + g.id + '"' + (dr.groupId === g.id ? ' selected' : '') + '>' + escapeHtml(g.name) + '</option>'; });
       html += '</select></div>';
     }
-    html += '<div class="auth-field"><label for="authEmail">E-Mail</label><input type="email" id="authEmail" autocomplete="email" placeholder="name@beispiel.de"></div>';
-    html += '<div class="auth-field"><label for="authPassword">Passwort</label><input type="password" id="authPassword" autocomplete="' + (isRegister ? "new-password" : "current-password") + '" placeholder="mind. 8 Zeichen: Groß, klein, Zahl, Sonderzeichen"></div>';
+    html += '<div class="auth-field"><label for="authEmail">E-Mail' + (isRegister ? ' (dienstlich)' : '') + '</label><input type="email" id="authEmail" autocomplete="email" placeholder="vorname.nachname@vak-sh.de" value="' + escapeHtml(dr.email) + '"></div>';
+    html += '<div class="auth-field"><label for="authPassword">Passwort</label><input type="password" id="authPassword" autocomplete="' + (isRegister ? "new-password" : "current-password") + '" placeholder="' + (isRegister ? 'mind. 8 Zeichen: Groß, klein, Zahl, Sonderzeichen' : '') + '" value="' + escapeHtml(dr.password) + '"></div>';
     html += '<button type="submit" class="btn-primary"' + (state.authBusy ? " disabled" : "") + '>' + (state.authBusy ? "Bitte warten…" : (isRegister ? "Konto erstellen" : "Anmelden")) + '</button>';
     html += '</form>';
     html += '<div class="auth-switch">';
@@ -1096,16 +1127,31 @@
 
   function bindLogin() {
     var form = document.getElementById("authForm");
+    // Eingaben laufend merken, damit sie ein erneutes Zeichnen (z. B. Fehlermeldung) überstehen
+    function syncDraft() {
+      var g = function (id) { var el = document.getElementById(id); return el ? el.value : null; };
+      var dr = state.authDraft;
+      if (g("firstName") !== null) dr.firstName = g("firstName");
+      if (g("lastName") !== null) dr.lastName = g("lastName");
+      if (g("regGroup") !== null) dr.groupId = g("regGroup");
+      dr.email = g("authEmail") || "";
+      dr.password = g("authPassword") || "";
+    }
+    form.addEventListener("input", syncDraft);
+    form.addEventListener("change", syncDraft);
     form.addEventListener("submit", function (e) {
       e.preventDefault();
-      var email = document.getElementById("authEmail").value.trim();
-      var password = document.getElementById("authPassword").value;
-      var fullNameEl = document.getElementById("fullName");
-      var fullName = fullNameEl ? fullNameEl.value.trim() : null;
-      var groupEl = document.getElementById("regGroup");
-      var groupId = groupEl ? groupEl.value : null;
-      handleAuthSubmit(email, password, fullName, groupId);
+      syncDraft();
+      var dr = state.authDraft;
+      var first = dr.firstName.trim(), last = dr.lastName.trim();
+      var fullName = state.authMode === "register" ? ((first && last) ? first + " " + last : null) : null;
+      handleAuthSubmit(dr.email.trim(), dr.password, fullName, state.authMode === "register" ? dr.groupId : null);
     });
+    if (state.authFocus) {
+      var fe = document.getElementById(state.authFocus);
+      if (fe) fe.focus();
+      state.authFocus = null;
+    }
     document.getElementById("switchAuth").addEventListener("click", function () {
       state.authMode = state.authMode === "register" ? "login" : "register";
       state.authError = null; state.authInfo = null;
