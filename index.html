@@ -380,6 +380,10 @@
   }
 
   // Nur noch für alte Protokolleinträge ohne Uhrzeit
+  // Bereich "Auswertungen" (Buchungshäufigkeit, Buchungsprotokoll) aus Datenschutzgründen und
+  // mit Blick auf die Mitbestimmung des Personalrats deaktiviert. Wieder einschalten: true setzen
+  // UND die Lese-Berechtigung auf booking_log in der Datenbank wiederherstellen (siehe supabase/).
+  var REPORTS_ENABLED = false;
   var LEGACY_PART_LABEL = { AM: "Vormittag", PM: "Nachmittag", FULL: "Ganztags" };
   var WORKDAY_COUNT = 10;
 
@@ -1140,9 +1144,9 @@
     else if (state.tab === "urlaub") html += renderUrlaub();
     else if (state.tab === "uebersicht") html += renderUebersicht();
     else if (state.tab === "admin") html += renderAdmin();
-    else if (state.tab === "auswertung") html += renderAuswertung();
+    else if (state.tab === "auswertung" && REPORTS_ENABLED) html += renderAuswertung();
     html += '</main>';
-    html += '<footer class="app-footer"><a id="adminLink">Systemverwaltung</a> · <a id="reportsLink">Auswertungen</a></footer>';
+    html += '<footer class="app-footer"><a id="adminLink">Systemverwaltung</a>' + (REPORTS_ENABLED ? ' · <a id="reportsLink">Auswertungen</a>' : '') + '</footer>';
     if (state.modal) html += renderModal();
     if (state.toastMsg) html += '<div class="toast">' + escapeHtml(state.toastMsg) + '</div>';
     return html;
@@ -1616,7 +1620,8 @@
       btn.addEventListener("click", function () { state.tab = btn.getAttribute("data-tab"); render(); });
     });
     document.getElementById("adminLink").addEventListener("click", function () { state.tab = "admin"; render(); });
-    document.getElementById("reportsLink").addEventListener("click", function () { state.tab = "auswertung"; render(); });
+    var reportsLink = document.getElementById("reportsLink");
+    if (reportsLink) reportsLink.addEventListener("click", function () { state.tab = "auswertung"; render(); });
 
     document.querySelectorAll(".date-chip").forEach(function (chip) {
       chip.addEventListener("click", function () { state.selectedDate = chip.getAttribute("data-date"); render(); });
