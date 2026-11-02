@@ -136,6 +136,32 @@
   .workspace-block:first-child { border-top: none; padding-top: 0; }
   .ws-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
   .ws-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .timeline { margin: 2px 0 6px; }
+  .tl-track { position: relative; height: 26px; border-radius: 8px; overflow: hidden; background: var(--free); border: 1px solid var(--free-border);
+    background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(100% / 15 - 1px), rgba(0,0,0,.07) calc(100% / 15 - 1px), rgba(0,0,0,.07) calc(100% / 15)); }
+  .tl-track.tl-click { cursor: pointer; }
+  .tl-seg { position: absolute; top: 0; bottom: 0; }
+  .tl-seg.busy { background: var(--busy-border); }
+  .tl-seg.mine { background: var(--vak-blue); }
+  .tl-seg.past { background: repeating-linear-gradient(45deg, var(--locked) 0 4px, var(--locked-border) 4px 6px); opacity: .85; }
+  .tl-seg.sel { background: rgba(31,127,184,.25); border: 2px solid var(--vak-blue-light); border-radius: 6px; }
+  .tl-seg.sel.bad { background: rgba(183,12,35,.18); border-color: var(--vak-red); }
+  .tl-scale { position: relative; height: 13px; margin-top: 2px; font-size: 9.5px; color: var(--text-muted); }
+  .tl-scale span { position: absolute; transform: translateX(-50%); }
+  .tl-scale span:last-child { transform: translateX(-100%); }
+  .ws-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; padding: 3px 0 3px 8px; border-left: 3px solid var(--busy-border); margin: 3px 0; }
+  .ws-line.mine { border-left-color: var(--vak-blue); }
+  .ws-line .mini-cancel { margin: 0; background: none; border: none; padding: 0; text-decoration: underline; font-size: 11px; font-weight: 700; color: var(--busy-text); cursor: pointer; flex-shrink: 0; }
+  .ws-free { font-size: 11.5px; color: var(--free-text); margin: 4px 0 8px; }
+  .preset-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0 12px; }
+  .preset-chip { border: 1.5px solid var(--border); background: var(--card-bg); color: var(--text); border-radius: 10px; padding: 7px 4px; font-size: 12px; font-weight: 700; cursor: pointer; line-height: 1.2; }
+  .preset-chip small { display: block; font-weight: 400; font-size: 10.5px; color: var(--text-muted); }
+  .preset-chip.active { border-color: var(--vak-blue); background: var(--name-accent-bg); color: var(--name-accent); }
+  .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .duration-note { font-size: 12.5px; color: var(--text); margin: 4px 0 10px; }
+  .duration-note span { color: var(--text-muted); }
+  .slot-errors { background: var(--busy); color: var(--busy-text); border-radius: 9px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 12px; }
+  .slot-errors div + div { margin-top: 4px; }
   .slot-btn { border-radius: 9px; padding: 9px 6px; font-size: 11.5px; font-weight: 600; border: 1.5px solid; cursor: pointer; text-align: center; line-height: 1.25; width: 100%; transition: transform .12s, box-shadow .12s; }
   .slot-btn.full-span { grid-column: 1 / -1; }
   .slot-btn.free { background: var(--free); border-color: var(--free-border); color: var(--free-text); }
@@ -198,6 +224,7 @@
   .modal-backdrop { position: fixed; inset: 0; background: rgba(10,15,20,0.45); display: flex; align-items: flex-end; justify-content: center; z-index: 50; padding-bottom: env(safe-area-inset-bottom, 0px); }
   .modal { background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px)); animation: slideUp 0.18s ease-out; }
   @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal { max-height: 92vh; overflow-y: auto; }
   .modal h3 { margin-top: 0; font-size: 16px; }
   .modal .modal-sub { color: var(--text-muted); font-size: 12.5px; margin-bottom: 14px; }
   .confirm-summary { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 18px; }
@@ -282,8 +309,15 @@
   }
   function groupById(id) { return state.groups.find(function (g) { return g.id === id; }) || null; }
 
-  var PART_LABEL = { AM: "Vormittag", PM: "Nachmittag", FULL: "Ganztags" };
-  var PART_TIME = { AM: "bis 12:00", PM: "ab 12:00", FULL: "" };
+  // Zeitspannen-Buchung: 30-Minuten-Raster zwischen 05:00 und 20:00 Uhr, höchstens 10 Stunden.
+  var DAY_START = 5 * 60, DAY_END = 20 * 60, STEP_MIN = 30, MAX_DURATION = 10 * 60;
+  var PRESETS = [
+    { key: "AM", label: "Vormittag", start: 8 * 60, end: 12 * 60 },
+    { key: "PM", label: "Nachmittag", start: 12 * 60, end: 16 * 60 },
+    { key: "FULL", label: "Ganztags", start: 8 * 60, end: 16 * 60 }
+  ];
+  // Nur noch für alte Protokolleinträge ohne Uhrzeit
+  var LEGACY_PART_LABEL = { AM: "Vormittag", PM: "Nachmittag", FULL: "Ganztags" };
   var WORKDAY_COUNT = 10;
 
   var state = {
@@ -344,41 +378,101 @@
 
   function bookingsForDate(dateISO) { return state.bookings.filter(function (b) { return b.booking_date === dateISO; }); }
 
-  function slotStatus(workspaceId, dateISO, part) {
-    var list = bookingsForDate(dateISO).filter(function (b) { return b.workspace_id === workspaceId; });
-    for (var i = 0; i < list.length; i++) {
-      var b = list[i];
-      if (b.part === "FULL" || b.part === part) return { status: "busy", booking: b };
-    }
-    return { status: "free", booking: null };
+  function toMin(t) { var p = String(t || "0:0").split(":"); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); }
+  function fmtMin(m) { return pad(Math.floor(m / 60)) + ":" + pad(m % 60); }
+  function bStart(b) { return toMin(b.start_time); }
+  function bEnd(b) { return toMin(b.end_time); }
+  function rangeLabel(s, e) { return fmtMin(s) + "–" + fmtMin(e) + " Uhr"; }
+  function bookingTimeLabel(b) { return b.start_time ? rangeLabel(bStart(b), bEnd(b)) : (LEGACY_PART_LABEL[b.part] || ""); }
+  function durationLabel(mins) { var h = mins / 60; return String(h).replace(".", ",") + " Std."; }
+  function overlaps(aS, aE, bS, bE) { return aS < bE && bS < aE; }
+  function byStart(a, b) { return bStart(a) - bStart(b); }
+
+  function workspaceBookings(wsId, dateISO) {
+    return bookingsForDate(dateISO).filter(function (b) { return b.workspace_id === wsId; }).sort(byStart);
+  }
+  function myBookingsOn(dateISO) {
+    if (!state.profile) return [];
+    return bookingsForDate(dateISO).filter(function (b) { return b.user_id === state.profile.id; }).sort(byStart);
+  }
+  // Bei "heute": aktuelle Uhrzeit in Minuten, sonst null
+  function nowMinIfToday(dateISO) {
+    var n = new Date();
+    return dateISO === fmtISO(n) ? n.getHours() * 60 + n.getMinutes() : null;
+  }
+  function workspaceLabelFor(b) {
+    var room = findRoomByNumber(b.room_number);
+    var ws = room ? room.workspaces.find(function (w) { return w.id === b.workspace_id; }) : null;
+    return (room ? room.label : b.room_number) + (ws ? " · " + ws.label : "");
   }
 
-  // Finds a booking the current user already holds elsewhere that overlaps this date/part
-  // (same overlap rule as the database trigger: FULL conflicts with everything).
-  function myConflictingBooking(dateISO, part, excludeWorkspaceId) {
-    if (!state.profile) return null;
-    return state.bookings.find(function (b) {
-      if (b.user_id !== state.profile.id) return false;
-      if (b.booking_date !== dateISO) return false;
-      if (b.workspace_id === excludeWorkspaceId) return false;
-      return b.part === "FULL" || part === "FULL" || b.part === part;
-    }) || null;
+  // Freie Zeitfenster eines Platzes (bei "heute" erst ab der aktuellen halben Stunde)
+  function freeIntervals(wsId, dateISO) {
+    var now = nowMinIfToday(dateISO);
+    var from = DAY_START;
+    if (now !== null) from = Math.max(from, Math.floor(now / STEP_MIN) * STEP_MIN);
+    var out = [];
+    workspaceBookings(wsId, dateISO).forEach(function (b) {
+      if (bStart(b) > from) out.push([from, Math.min(bStart(b), DAY_END)]);
+      from = Math.max(from, bEnd(b));
+    });
+    if (from < DAY_END) out.push([from, DAY_END]);
+    return out.filter(function (iv) { return iv[1] - iv[0] >= STEP_MIN; });
   }
 
-  function partAvailability(ws, dateISO, part) {
-    var s = slotStatus(ws.id, dateISO, part);
-    if (s.status === "busy") {
-      var owner = profileById(s.booking.user_id);
-      return { kind: "busy", note: owner ? owner.full_name : "belegt" };
+  // Prüft einen Wunschzeitraum gegen alle Regeln; liefert Liste verständlicher Hinweise
+  function validateSlot(wsId, dateISO, s, e) {
+    var errs = [];
+    if (!(e > s)) errs.push("Das Ende muss nach dem Beginn liegen.");
+    if (s < DAY_START || e > DAY_END) errs.push("Buchbar ist der Zeitraum von 05:00 bis 20:00 Uhr.");
+    if (e - s > MAX_DURATION) errs.push("Eine Buchung darf höchstens 10 Stunden umfassen.");
+    var now = nowMinIfToday(dateISO);
+    if (now !== null && e <= now) errs.push("Dieser Zeitraum liegt bereits in der Vergangenheit.");
+    if (e > s) {
+      workspaceBookings(wsId, dateISO).forEach(function (b) {
+        if (!overlaps(s, e, bStart(b), bEnd(b))) return;
+        var mine = state.profile && b.user_id === state.profile.id;
+        var owner = profileById(b.user_id);
+        errs.push("Platz ist " + rangeLabel(bStart(b), bEnd(b)) + " belegt" + (mine ? " (deine Buchung)" : (owner ? " (" + owner.full_name + ")" : "")) + ".");
+      });
+      myBookingsOn(dateISO).forEach(function (b) {
+        if (b.workspace_id === wsId || !overlaps(s, e, bStart(b), bEnd(b))) return;
+        errs.push("Du hast " + rangeLabel(bStart(b), bEnd(b)) + " bereits " + workspaceLabelFor(b) + " gebucht.");
+      });
     }
-    var conflict = myConflictingBooking(dateISO, part, ws.id);
-    if (conflict) {
-      var croom = findRoomByNumber(conflict.room_number);
-      var cws = croom ? croom.workspaces.find(function (w) { return w.id === conflict.workspace_id; }) : null;
-      var where = (croom ? croom.label : conflict.room_number) + (cws ? " · " + cws.label : "");
-      return { kind: "own", note: where, conflictId: conflict.id };
+    return errs;
+  }
+
+  // Vorschlag für den Buchungsdialog: erste passende Schnellauswahl, sonst erstes freies Fenster
+  function suggestSlot(wsId, dateISO, preferStart) {
+    if (preferStart != null) {
+      var iv = freeIntervals(wsId, dateISO).find(function (x) { return preferStart >= x[0] && preferStart < x[1]; });
+      if (iv) return { start: preferStart, end: Math.min(iv[1], preferStart + 4 * 60) };
     }
-    return { kind: "free" };
+    var p = PRESETS.slice().reverse().find(function (x) { return !validateSlot(wsId, dateISO, x.start, x.end).length; });
+    if (p) return { start: p.start, end: p.end };
+    // Sonst: freies Fenster (ohne eigene Buchungen auf anderen Plätzen) mit dem größten Anteil an der Kernzeit 08–16 Uhr
+    var mine = myBookingsOn(dateISO).filter(function (b) { return b.workspace_id !== wsId; });
+    var cands = [];
+    freeIntervals(wsId, dateISO).forEach(function (iv) {
+      var parts = [iv];
+      mine.forEach(function (b) {
+        var next = [];
+        parts.forEach(function (x) {
+          if (!overlaps(x[0], x[1], bStart(b), bEnd(b))) { next.push(x); return; }
+          if (bStart(b) > x[0]) next.push([x[0], bStart(b)]);
+          if (bEnd(b) < x[1]) next.push([bEnd(b), x[1]]);
+        });
+        parts = next;
+      });
+      parts.forEach(function (x) { if (x[1] - x[0] >= STEP_MIN) cands.push(x); });
+    });
+    if (!cands.length) return null;
+    function core(x) { return Math.max(0, Math.min(x[1], 16 * 60) - Math.max(x[0], 8 * 60)); }
+    cands.sort(function (a, b) { return core(b) - core(a) || (b[1] - b[0]) - (a[1] - a[0]); });
+    var best = cands[0];
+    var start = core(best) > 0 ? Math.max(best[0], 8 * 60) : best[0];
+    return { start: start, end: Math.min(best[1], start + 4 * 60) };
   }
 
   function workspacePermState(workspaceId, dateISO) {
@@ -444,8 +538,10 @@
 
   // ---------- booking actions ----------
 
-  function openBookingModal(room, workspace, dateISO, part) {
-    state.modal = { type: "book", room: room, workspace: workspace, dateISO: dateISO, part: part };
+  function openBookingModal(room, workspace, dateISO, preferStart) {
+    var sug = suggestSlot(workspace.id, dateISO, preferStart);
+    if (!sug) { showToast("Dieser Platz ist an diesem Tag nicht mehr frei."); return; }
+    state.modal = { type: "book", room: room, workspace: workspace, dateISO: dateISO, start: sug.start, end: sug.end, busy: false };
     render();
   }
   function closeModal() { state.modal = null; render(); }
@@ -453,24 +549,35 @@
   function confirmBooking() {
     var m = state.modal;
     if (!m) return;
+    if (validateSlot(m.workspace.id, m.dateISO, m.start, m.end).length || m.busy) return;
+    m.busy = true; render();
     supabaseClient.from("bookings").insert({
       user_id: state.profile.id, room_number: m.room.number, workspace_id: m.workspace.id,
-      booking_date: m.dateISO, part: m.part
+      booking_date: m.dateISO, start_time: fmtMin(m.start), end_time: fmtMin(m.end)
     }).then(function (res) {
       if (res.error) {
-        var msg = /andere Buchung/i.test(res.error.message)
-          ? "Für diesen Zeitraum besteht bereits eine andere Buchung von dir. Bitte zuerst stornieren."
-          : "Buchung fehlgeschlagen: " + res.error.message;
-        showToast(msg);
+        // Dialog offen lassen und aktuelle Belegung nachladen, damit ein anderer Zeitraum gewählt werden kann
+        m.busy = false;
+        showToast(translateBookingError(res.error));
         console.error(res.error);
-        closeModal();
         loadBookings();
         return;
       }
-      showToast("Gebucht: " + m.room.label + " · " + m.workspace.label);
+      showToast("Gebucht: " + m.room.label + " · " + m.workspace.label + ", " + rangeLabel(m.start, m.end));
       closeModal();
       loadBookings();
     });
+  }
+
+  function translateBookingError(err) {
+    var msg = (err && err.message) || "";
+    if (/no_workspace_overlap/.test(msg)) return "Der Platz wurde soeben für einen Teil dieses Zeitraums gebucht. Bitte einen anderen Zeitraum wählen.";
+    if (/no_user_overlap/.test(msg)) return "Du hast in diesem Zeitraum bereits eine andere Buchung.";
+    if (/max_duration/.test(msg)) return "Eine Buchung darf höchstens 10 Stunden umfassen.";
+    if (/time_frame/.test(msg)) return "Buchbar ist der Zeitraum von 05:00 bis 20:00 Uhr.";
+    if (/time_grid/.test(msg)) return "Bitte Uhrzeiten im 30-Minuten-Raster wählen.";
+    if (/[äöüÄÖÜß]| Uhr|Buchung|Arbeitsplatz/.test(msg)) return msg; // deutsche Meldung aus der Datenbank
+    return "Buchung fehlgeschlagen: " + msg;
   }
 
   function cancelBooking(id) {
@@ -640,17 +747,20 @@
     if (toISO < fromISO) { showToast("Das Enddatum muss nach dem Startdatum liegen."); return; }
     state.report.freqFrom = fromISO; state.report.freqTo = toISO;
     state.report.freqLoading = true; state.report.freqRows = null; render();
-    supabaseClient.from("bookings").select("room_number")
+    supabaseClient.from("bookings").select("room_number, start_time, end_time")
       .gte("booking_date", fromISO).lte("booking_date", toISO)
       .then(function (res) {
         state.report.freqLoading = false;
         if (res.error) { showToast("Laden fehlgeschlagen: " + res.error.message); console.error(res.error); render(); return; }
-        var counts = {};
-        (res.data || []).forEach(function (b) { counts[b.room_number] = (counts[b.room_number] || 0) + 1; });
+        var counts = {}, minutes = {};
+        (res.data || []).forEach(function (b) {
+          counts[b.room_number] = (counts[b.room_number] || 0) + 1;
+          minutes[b.room_number] = (minutes[b.room_number] || 0) + (bEnd(b) - bStart(b));
+        });
         state.report.freqRows = Object.keys(counts).map(function (num) {
           var room = findRoomByNumber(num);
-          return { label: room ? room.label : num, count: counts[num] };
-        }).sort(function (a, b) { return b.count - a.count; });
+          return { label: room ? room.label : num, count: counts[num], minutes: minutes[num] };
+        }).sort(function (a, b) { return b.minutes - a.minutes || b.count - a.count; });
         render();
       });
   }
@@ -660,7 +770,7 @@
     if (toISO < fromISO) { showToast("Das Enddatum muss nach dem Startdatum liegen."); return; }
     state.report.logFrom = fromISO; state.report.logTo = toISO;
     state.report.logLoading = true; state.report.logRows = null; render();
-    supabaseClient.from("booking_log").select("id, action, event_at, user_id, acted_by, room_number, workspace_id, booking_date, part")
+    supabaseClient.from("booking_log").select("id, action, event_at, user_id, acted_by, room_number, workspace_id, booking_date, part, start_time, end_time")
       .gte("event_at", fromISO + "T00:00:00").lte("event_at", toISO + "T23:59:59")
       .order("event_at", { ascending: false })
       .then(function (res) {
@@ -697,7 +807,7 @@
     });
   }
   function loadBookings() {
-    return supabaseClient.from("bookings").select("id, user_id, room_number, workspace_id, booking_date, part")
+    return supabaseClient.from("bookings").select("id, user_id, room_number, workspace_id, booking_date, start_time, end_time")
       .gte("booking_date", fmtISO(new Date(Date.now() - 86400000)))
       .then(function (res) { if (!res.error) state.bookings = res.data || []; render(); });
   }
@@ -933,17 +1043,46 @@
     return html;
   }
 
-  function partButtonHtml(room, ws, part, avail) {
-    if (avail.kind === "free") {
-      var timeNote = PART_TIME[part] ? '<small>' + PART_TIME[part] + '</small>' : '';
-      return '<button class="slot-btn free" data-room="' + room.number + '" data-ws="' + ws.id + '" data-part="' + part + '">' + PART_LABEL[part] + timeNote + '</button>';
+  var TL_SPAN = DAY_END - DAY_START;
+  function pct(m) { return ((m - DAY_START) / TL_SPAN * 100).toFixed(3) + "%"; }
+  function pctW(s, e) { return ((e - s) / TL_SPAN * 100).toFixed(3) + "%"; }
+
+  // Zeitleiste 05–20 Uhr: belegte Zeiten rot, eigene blau, Vergangenheit schraffiert, optional Auswahl
+  function timelineHtml(wsId, dateISO, opts) {
+    opts = opts || {};
+    var html = '<div class="timeline">';
+    html += '<div class="tl-track' + (opts.clickable ? ' tl-click' : '') + '"' + (opts.clickable ? ' data-tl-room="' + opts.roomNumber + '" data-tl-ws="' + wsId + '" title="Auf eine freie Stelle tippen, um ab dieser Uhrzeit zu buchen"' : '') + '>';
+    var now = nowMinIfToday(dateISO);
+    if (now !== null && now > DAY_START) html += '<div class="tl-seg past" style="left:0;width:' + pctW(DAY_START, Math.min(now, DAY_END)) + '"></div>';
+    workspaceBookings(wsId, dateISO).forEach(function (b) {
+      var mine = state.profile && b.user_id === state.profile.id;
+      var s = Math.max(bStart(b), DAY_START), e = Math.min(bEnd(b), DAY_END);
+      html += '<div class="tl-seg ' + (mine ? 'mine' : 'busy') + '" style="left:' + pct(s) + ';width:' + pctW(s, e) + '"></div>';
+    });
+    if (opts.sel) {
+      html += '<div class="tl-seg sel' + (opts.selBad ? ' bad' : '') + '" style="left:' + pct(opts.sel[0]) + ';width:' + pctW(opts.sel[0], opts.sel[1]) + '"></div>';
     }
-    if (avail.kind === "own") {
-      var html = '<div class="slot-btn ownconflict">' + PART_LABEL[part] + '<small>eigene Buchung: ' + escapeHtml(avail.note) + '</small>';
-      html += '<button type="button" class="mini-cancel" data-cancel-inline="' + avail.conflictId + '">zuerst stornieren</button></div>';
-      return html;
-    }
-    return '<div class="slot-btn busy">' + PART_LABEL[part] + '<small>' + escapeHtml(avail.note || "belegt") + '</small></div>';
+    html += '</div><div class="tl-scale">';
+    for (var hh = 6; hh <= 20; hh += 2) html += '<span style="left:' + pct(hh * 60) + '">' + hh + '</span>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function workspaceBookingListHtml(wsId, dateISO) {
+    var list = workspaceBookings(wsId, dateISO);
+    var html = '';
+    list.forEach(function (b) {
+      var mine = state.profile && b.user_id === state.profile.id;
+      var owner = profileById(b.user_id);
+      html += '<div class="ws-line ' + (mine ? 'mine' : 'busy') + '"><span><b>' + fmtMin(bStart(b)) + '–' + fmtMin(bEnd(b)) + '</b> ' + (mine ? 'Deine Buchung' : escapeHtml(owner ? owner.full_name : 'belegt')) + '</span>';
+      if (mine) html += '<button type="button" class="mini-cancel" data-cancel-inline="' + b.id + '">stornieren</button>';
+      html += '</div>';
+    });
+    var free = freeIntervals(wsId, dateISO);
+    html += '<div class="ws-free">' + (free.length
+      ? 'Frei: ' + free.map(function (iv) { return fmtMin(iv[0]) + '–' + fmtMin(iv[1]); }).join(', ') + ' Uhr'
+      : 'An diesem Tag ist kein Zeitfenster mehr frei.') + '</div>';
+    return { html: html, hasFree: free.length > 0 };
   }
 
   function renderBuchen() {
@@ -959,7 +1098,7 @@
     var myPermWorkspaceIds = Object.keys(state.permanentAssignments).filter(function (wsId) { return state.permanentAssignments[wsId] === state.profile.id; });
     var hasOwnPermanentDesk = myPermWorkspaceIds.length > 0;
     var iAmOnVacationToday = state.vacations.some(function (v) { return v.user_id === state.profile.id && v.vacation_date === dateISO; });
-    html += '<div class="legend"><span><i style="background:var(--free-border)"></i>frei</span><span><i style="background:var(--busy-border)"></i>belegt</span><span><i style="background:var(--permanent-border)"></i>dauerhaft belegt</span></div>';
+    html += '<div class="legend"><span><i style="background:var(--free)"></i>frei</span><span><i style="background:var(--busy-border)"></i>belegt</span><span><i style="background:var(--vak-blue)"></i>deine Buchung</span><span><i style="background:var(--permanent-border)"></i>dauerhaft belegt</span></div>';
     if (hasOwnPermanentDesk) {
       html += '<div class="banner">Dir ist ein fester Büroarbeitsplatz dauerhaft zugewiesen. Andere Arbeitsplätze kannst du daher nicht buchen.</div>';
     }
@@ -980,20 +1119,12 @@
           var owner = profileById(state.permanentAssignments[ws.id]);
           html += '<div class="slot-btn permanent full-span">Dauerhaft belegt<small>' + escapeHtml(owner ? owner.full_name : "?") + '</small></div>';
         } else {
-          var amAvail = partAvailability(ws, dateISO, "AM");
-          var pmAvail = partAvailability(ws, dateISO, "PM");
-          var fullAvail = partAvailability(ws, dateISO, "FULL");
-          // Someone else holding AM or PM here always makes FULL impossible — this must win
-          // even if the base FULL check already resolved to "own" (a conflict elsewhere),
-          // because cancelling that own booking would not free up this workspace.
-          if (amAvail.kind === "busy" || pmAvail.kind === "busy") {
-            fullAvail = { kind: "busy", note: "nicht verfügbar" };
-          } else if (fullAvail.kind === "free" && (amAvail.kind === "own" || pmAvail.kind === "own")) {
-            fullAvail = amAvail.kind === "own" ? amAvail : pmAvail;
-          }
-          html += partButtonHtml(room, ws, "AM", amAvail);
-          html += partButtonHtml(room, ws, "PM", pmAvail);
-          html += partButtonHtml(room, ws, "FULL", fullAvail);
+          html += '</div>';
+          html += timelineHtml(ws.id, dateISO, { clickable: true, roomNumber: room.number });
+          var info = workspaceBookingListHtml(ws.id, dateISO);
+          html += info.html;
+          html += '<div class="ws-slots">';
+          if (info.hasFree) html += '<button class="slot-btn free full-span" data-room="' + room.number + '" data-ws="' + ws.id + '">Zeitraum wählen &amp; buchen</button>';
         }
         html += '</div>';
         if (!iAmOnVacationToday && permState === "released") {
@@ -1007,7 +1138,7 @@
   }
 
   function renderMeine() {
-    var mine = state.bookings.filter(function (b) { return b.user_id === state.profile.id; }).sort(function (a, b) { return a.booking_date.localeCompare(b.booking_date); });
+    var mine = state.bookings.filter(function (b) { return b.user_id === state.profile.id; }).sort(function (a, b) { return a.booking_date.localeCompare(b.booking_date) || byStart(a, b); });
     var html = '<div class="card"><h3>Meine Buchungen</h3>';
     if (!mine.length) { html += '<div class="empty-state">Noch keine Buchungen vorhanden.</div>'; }
     else {
@@ -1016,7 +1147,7 @@
         var ws = room ? room.workspaces.find(function (w) { return w.id === b.workspace_id; }) : null;
         var d = parseISO(b.booking_date);
         html += '<div class="booking-item"><div><div class="booking-main">' + (room ? escapeHtml(room.label) : b.room_number) + (ws ? " · " + escapeHtml(ws.label) : "") + '</div>';
-        html += '<div class="booking-sub">' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + ' · ' + PART_LABEL[b.part] + '</div></div>';
+        html += '<div class="booking-sub">' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + ' · ' + bookingTimeLabel(b) + ' (' + durationLabel(bEnd(b) - bStart(b)) + ')</div></div>';
         html += '<button class="btn-danger" data-cancel="' + b.id + '">Stornieren</button></div>';
       });
     }
@@ -1179,7 +1310,7 @@
     state.dates.forEach(function (d) {
       var iso = fmtISO(d);
       var dayBookings = state.bookings.filter(function (b) { return b.booking_date === iso; })
-        .sort(function (a, b) { return a.room_number.localeCompare(b.room_number) || a.workspace_id.localeCompare(b.workspace_id); });
+        .sort(function (a, b) { return a.room_number.localeCompare(b.room_number) || a.workspace_id.localeCompare(b.workspace_id) || byStart(a, b); });
       var dayVacations = state.vacations.filter(function (v) { return v.vacation_date === iso; });
       html += '<div class="card"><h3>' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</h3>';
       if (!dayBookings.length && !dayVacations.length) {
@@ -1189,7 +1320,7 @@
           var room = findRoomByNumber(b.room_number);
           var ws = room ? room.workspaces.find(function (w) { return w.id === b.workspace_id; }) : null;
           var owner = profileById(b.user_id);
-          html += '<div class="admin-row"><span>' + (room ? escapeHtml(room.label) : b.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + ' · ' + PART_LABEL[b.part] + '</span><span>' + escapeHtml(owner ? owner.full_name : "?") + '</span></div>';
+          html += '<div class="admin-row"><span>' + (room ? escapeHtml(room.label) : b.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + ' · ' + bookingTimeLabel(b) + '</span><span>' + escapeHtml(owner ? owner.full_name : "?") + '</span></div>';
         });
         if (dayVacations.length) {
           var names = dayVacations.map(function (v) { var o = profileById(v.user_id); return escapeHtml(o ? o.full_name : "?"); }).join(", ");
@@ -1207,7 +1338,7 @@
     }
 
     var html = '<div class="card"><h3>Buchungshäufigkeit je Raum</h3>';
-    html += '<div class="modal-sub">Anzahl der Buchungen je Raum in einem frei wählbaren Zeitraum (nach Datum der Buchung).</div>';
+    html += '<div class="modal-sub">Anzahl und gebuchte Stunden je Raum in einem frei wählbaren Zeitraum (nach Datum der Buchung).</div>';
     html += '<label for="freqFrom">Von</label><input type="date" id="freqFrom" value="' + escapeHtml(state.report.freqFrom || '') + '">';
     html += '<label for="freqTo">Bis</label><input type="date" id="freqTo" value="' + escapeHtml(state.report.freqTo || '') + '">';
     html += '<div style="height:10px"></div><button class="btn-primary" id="runFreqBtn"' + (state.report.freqLoading ? " disabled" : "") + '>' + (state.report.freqLoading ? "Lädt…" : "Auswerten") + '</button>';
@@ -1215,7 +1346,7 @@
       if (!state.report.freqRows.length) { html += '<div class="empty-state">Keine Buchungen im gewählten Zeitraum.</div>'; }
       else {
         state.report.freqRows.forEach(function (row) {
-          html += '<div class="admin-row"><span>' + escapeHtml(row.label) + '</span><span>' + row.count + ' Buchung(en)</span></div>';
+          html += '<div class="admin-row"><span>' + escapeHtml(row.label) + '</span><span>' + row.count + ' Buchung(en) · ' + durationLabel(row.minutes) + '</span></div>';
         });
       }
     }
@@ -1240,7 +1371,7 @@
           var byWhom = escapeHtml(actor ? actor.full_name : "?") + (owner && actor && owner.id !== actor.id ? " (für " + escapeHtml(owner.full_name) + ")" : "");
           var bd = parseISO(r.booking_date);
           html += '<div class="admin-row" style="align-items:flex-start"><span>' + stamp + '<br><span style="color:var(--text-muted)">' + actionLabel + ' von ' + byWhom + '</span></span>';
-          html += '<span style="text-align:right">' + (room ? escapeHtml(room.label) : r.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + '<br><span style="color:var(--text-muted)">' + DOW[bd.getDay()] + ', ' + bd.getDate() + '. ' + MONTHS[bd.getMonth()] + ' · ' + PART_LABEL[r.part] + '</span></span></div>';
+          html += '<span style="text-align:right">' + (room ? escapeHtml(room.label) : r.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + '<br><span style="color:var(--text-muted)">' + DOW[bd.getDay()] + ', ' + bd.getDate() + '. ' + MONTHS[bd.getMonth()] + ' · ' + escapeHtml(bookingTimeLabel(r)) + '</span></span></div>';
         });
       }
     }
@@ -1252,16 +1383,29 @@
   function renderModal() {
     var m = state.modal; if (!m || m.type !== "book") return "";
     var html = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">';
-    html += '<h3>Buchung bestätigen</h3>';
+    html += '<h3>Arbeitsplatz buchen</h3>';
     var d = parseISO(m.dateISO);
-    var timeNote = { AM: "bis 12:00 Uhr", PM: "ab 12:00 Uhr", FULL: "" }[m.part];
+    var errs = validateSlot(m.workspace.id, m.dateISO, m.start, m.end);
     html += '<div class="confirm-summary">';
     html += '<div class="confirm-row"><span>Arbeitsplatz</span><b>' + escapeHtml(m.room.label) + ' · ' + escapeHtml(m.workspace.label) + '</b></div>';
     html += '<div class="confirm-row"><span>Datum</span><b>' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</b></div>';
-    html += '<div class="confirm-row"><span>Zeitraum</span><b>' + PART_LABEL[m.part] + (timeNote ? ' (' + timeNote + ')' : '') + '</b></div>';
     html += '</div>';
+    html += '<label>Schnellauswahl</label><div class="preset-row">';
+    PRESETS.forEach(function (p) {
+      var active = p.start === m.start && p.end === m.end;
+      html += '<button type="button" class="preset-chip' + (active ? ' active' : '') + '" data-preset="' + p.key + '">' + p.label + '<small>' + fmtMin(p.start) + '–' + fmtMin(p.end) + '</small></button>';
+    });
+    html += '</div>';
+    html += '<div class="time-row"><div><label for="slotStart">Von</label><select id="slotStart">';
+    for (var t = DAY_START; t < DAY_END; t += STEP_MIN) html += '<option value="' + t + '"' + (t === m.start ? ' selected' : '') + '>' + fmtMin(t) + ' Uhr</option>';
+    html += '</select></div><div><label for="slotEnd">Bis</label><select id="slotEnd">';
+    for (var u = DAY_START + STEP_MIN; u <= DAY_END; u += STEP_MIN) html += '<option value="' + u + '"' + (u === m.end ? ' selected' : '') + '>' + fmtMin(u) + ' Uhr</option>';
+    html += '</select></div></div>';
+    html += timelineHtml(m.workspace.id, m.dateISO, { sel: [Math.min(m.start, m.end), Math.max(m.start, m.end)], selBad: errs.length > 0 });
+    html += '<div class="duration-note">Dauer: <b>' + (m.end > m.start ? durationLabel(m.end - m.start) : '–') + '</b> <span>(max. 10 Std.)</span></div>';
+    if (errs.length) html += '<div class="slot-errors">' + errs.map(function (x) { return '<div>' + escapeHtml(x) + '</div>'; }).join('') + '</div>';
     html += '<div class="modal-actions"><button class="btn-secondary" id="modalCancel">Abbrechen</button>';
-    html += '<button class="btn-primary" id="modalConfirm">Jetzt buchen</button></div></div></div>';
+    html += '<button class="btn-primary" id="modalConfirm"' + (errs.length || m.busy ? ' disabled' : '') + '>' + (m.busy ? 'Wird gebucht…' : 'Jetzt buchen') + '</button></div></div></div>';
     return html;
   }
 
@@ -1287,7 +1431,20 @@
       btn.addEventListener("click", function () {
         var room = findRoomByNumber(btn.getAttribute("data-room"));
         var ws = room.workspaces.find(function (w) { return w.id === btn.getAttribute("data-ws"); });
-        openBookingModal(room, ws, state.selectedDate, btn.getAttribute("data-part"));
+        openBookingModal(room, ws, state.selectedDate, null);
+      });
+    });
+    // Tippen auf eine freie Stelle der Zeitleiste: Buchung ab dieser halben Stunde vorschlagen
+    document.querySelectorAll(".tl-track.tl-click").forEach(function (track) {
+      track.addEventListener("click", function (e) {
+        var rect = track.getBoundingClientRect();
+        var minute = DAY_START + Math.floor(((e.clientX - rect.left) / rect.width) * TL_SPAN / STEP_MIN) * STEP_MIN;
+        minute = Math.max(DAY_START, Math.min(DAY_END - STEP_MIN, minute));
+        var room = findRoomByNumber(track.getAttribute("data-tl-room"));
+        var ws = room.workspaces.find(function (w) { return w.id === track.getAttribute("data-tl-ws"); });
+        var inFree = freeIntervals(ws.id, state.selectedDate).some(function (iv) { return minute >= iv[0] && minute < iv[1]; });
+        if (!inFree) { showToast("Um " + fmtMin(minute) + " Uhr ist dieser Platz nicht frei."); return; }
+        openBookingModal(room, ws, state.selectedDate, minute);
       });
     });
     document.querySelectorAll("[data-cancel]").forEach(function (btn) { btn.addEventListener("click", function () { cancelBooking(btn.getAttribute("data-cancel")); }); });
@@ -1368,6 +1525,21 @@
       backdrop.addEventListener("click", function (e) { if (e.target === backdrop) closeModal(); });
       document.getElementById("modalCancel").addEventListener("click", closeModal);
       document.getElementById("modalConfirm").addEventListener("click", confirmBooking);
+      document.querySelectorAll("[data-preset]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var p = PRESETS.find(function (x) { return x.key === btn.getAttribute("data-preset"); });
+          state.modal.start = p.start; state.modal.end = p.end; render();
+        });
+      });
+      var selS = document.getElementById("slotStart"), selE = document.getElementById("slotEnd");
+      if (selS) selS.addEventListener("change", function () {
+        var dur = state.modal.end - state.modal.start;
+        state.modal.start = parseInt(selS.value, 10);
+        // Dauer beibehalten, solange es passt
+        if (dur > 0) state.modal.end = Math.min(DAY_END, state.modal.start + dur);
+        render();
+      });
+      if (selE) selE.addEventListener("change", function () { state.modal.end = parseInt(selE.value, 10); render(); });
     }
   }
 
