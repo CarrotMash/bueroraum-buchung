@@ -151,6 +151,10 @@
   .tl-scale span:last-child { transform: translateX(-100%); }
   .ws-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; padding: 3px 0 3px 8px; border-left: 3px solid var(--busy-border); margin: 3px 0; }
   .ws-line.mine { border-left-color: var(--vak-blue); }
+  .line-actions { display: inline-flex; gap: 10px; flex-shrink: 0; }
+  .ws-line .mini-edit { margin: 0; background: none; border: none; padding: 0; text-decoration: underline; font-size: 11px; font-weight: 700; color: var(--name-accent); cursor: pointer; }
+  .booking-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .btn-edit { border: none; background: var(--name-accent-bg); color: var(--name-accent); border-radius: 8px; padding: 7px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
   .ws-line .mini-cancel { margin: 0; background: none; border: none; padding: 0; text-decoration: underline; font-size: 11px; font-weight: 700; color: var(--busy-text); cursor: pointer; flex-shrink: 0; }
   .ws-free { font-size: 11.5px; color: var(--free-text); margin: 4px 0 8px; }
   .preset-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0 12px; }
@@ -309,8 +313,8 @@
   }
   function groupById(id) { return state.groups.find(function (g) { return g.id === id; }) || null; }
 
-  // Zeitspannen-Buchung: 30-Minuten-Raster zwischen 05:00 und 20:00 Uhr, höchstens 10 Stunden.
-  var DAY_START = 5 * 60, DAY_END = 20 * 60, STEP_MIN = 30, MAX_DURATION = 10 * 60;
+  // Zeitspannen-Buchung: 30-Minuten-Raster zwischen 05:00 und 20:00 Uhr, höchstens 10,5 Stunden.
+  var DAY_START = 5 * 60, DAY_END = 20 * 60, STEP_MIN = 30, MAX_DURATION = 10 * 60 + 30;
   var PRESETS = [
     { key: "AM", label: "Vormittag", start: 8 * 60, end: 12 * 60 },
     { key: "PM", label: "Nachmittag", start: 12 * 60, end: 16 * 60 },
@@ -421,22 +425,22 @@
   }
 
   // Prüft einen Wunschzeitraum gegen alle Regeln; liefert Liste verständlicher Hinweise
-  function validateSlot(wsId, dateISO, s, e) {
+  function validateSlot(wsId, dateISO, s, e, excludeId) {
     var errs = [];
     if (!(e > s)) errs.push("Das Ende muss nach dem Beginn liegen.");
     if (s < DAY_START || e > DAY_END) errs.push("Buchbar ist der Zeitraum von 05:00 bis 20:00 Uhr.");
-    if (e - s > MAX_DURATION) errs.push("Eine Buchung darf höchstens 10 Stunden umfassen.");
+    if (e - s > MAX_DURATION) errs.push("Eine Buchung darf höchstens 10,5 Stunden umfassen.");
     var now = nowMinIfToday(dateISO);
     if (now !== null && e <= now) errs.push("Dieser Zeitraum liegt bereits in der Vergangenheit.");
     if (e > s) {
       workspaceBookings(wsId, dateISO).forEach(function (b) {
-        if (!overlaps(s, e, bStart(b), bEnd(b))) return;
+        if (b.id === excludeId || !overlaps(s, e, bStart(b), bEnd(b))) return;
         var mine = state.profile && b.user_id === state.profile.id;
         var owner = profileById(b.user_id);
         errs.push("Platz ist " + rangeLabel(bStart(b), bEnd(b)) + " belegt" + (mine ? " (deine Buchung)" : (owner ? " (" + owner.full_name + ")" : "")) + ".");
       });
       myBookingsOn(dateISO).forEach(function (b) {
-        if (b.workspace_id === wsId || !overlaps(s, e, bStart(b), bEnd(b))) return;
+        if (b.id === excludeId || b.workspace_id === wsId || !overlaps(s, e, bStart(b), bEnd(b))) return;
         errs.push("Du hast " + rangeLabel(bStart(b), bEnd(b)) + " bereits " + workspaceLabelFor(b) + " gebucht.");
       });
     }
@@ -544,12 +548,35 @@
     state.modal = { type: "book", room: room, workspace: workspace, dateISO: dateISO, start: sug.start, end: sug.end, busy: false };
     render();
   }
+  // Eigene Buchung anpassen: nur Beginn und Ende (Platz und Tag bleiben)
+  function openEditModal(bookingId) {
+    var b = state.bookings.find(function (x) { return x.id === bookingId; });
+    if (!b) return;
+    var room = findRoomByNumber(b.room_number);
+    var ws = room ? room.workspaces.find(function (w) { return w.id === b.workspace_id; }) : null;
+    if (!room || !ws) { showToast("Arbeitsplatz nicht gefunden."); return; }
+    state.modal = { type: "book", mode: "edit", bookingId: b.id, room: room, workspace: ws, dateISO: b.booking_date,
+      start: bStart(b), end: bEnd(b), origStart: bStart(b), origEnd: bEnd(b), busy: false };
+    render();
+  }
+  // Anpassen nur, solange die Buchung nicht vorbei ist
+  function canEditBooking(b) {
+    var today = fmtISO(new Date());
+    if (b.booking_date < today) return false;
+    var now = nowMinIfToday(b.booking_date);
+    return now === null || bEnd(b) > now;
+  }
+  function modalErrors(m) {
+    var errs = validateSlot(m.workspace.id, m.dateISO, m.start, m.end, m.mode === "edit" ? m.bookingId : null);
+    return errs;
+  }
   function closeModal() { state.modal = null; render(); }
 
   function confirmBooking() {
     var m = state.modal;
     if (!m) return;
-    if (validateSlot(m.workspace.id, m.dateISO, m.start, m.end).length || m.busy) return;
+    if (modalErrors(m).length || m.busy) return;
+    if (m.mode === "edit") { saveBookingChange(m); return; }
     m.busy = true; render();
     supabaseClient.from("bookings").insert({
       user_id: state.profile.id, room_number: m.room.number, workspace_id: m.workspace.id,
@@ -569,11 +596,30 @@
     });
   }
 
+  function saveBookingChange(m) {
+    if (m.start === m.origStart && m.end === m.origEnd) { closeModal(); return; }
+    m.busy = true; render();
+    supabaseClient.from("bookings").update({ start_time: fmtMin(m.start), end_time: fmtMin(m.end) })
+      .eq("id", m.bookingId).select("id")
+      .then(function (res) {
+        m.busy = false;
+        if (res.error || !res.data || !res.data.length) {
+          showToast(res.error ? translateBookingError(res.error) : "Anpassen nicht möglich – bitte Seite neu laden.");
+          if (res.error) console.error(res.error);
+          loadBookings();
+          return;
+        }
+        showToast("Angepasst: " + m.room.label + " · " + m.workspace.label + ", " + rangeLabel(m.start, m.end));
+        closeModal();
+        loadBookings();
+      });
+  }
+
   function translateBookingError(err) {
     var msg = (err && err.message) || "";
     if (/no_workspace_overlap/.test(msg)) return "Der Platz wurde soeben für einen Teil dieses Zeitraums gebucht. Bitte einen anderen Zeitraum wählen.";
     if (/no_user_overlap/.test(msg)) return "Du hast in diesem Zeitraum bereits eine andere Buchung.";
-    if (/max_duration/.test(msg)) return "Eine Buchung darf höchstens 10 Stunden umfassen.";
+    if (/max_duration/.test(msg)) return "Eine Buchung darf höchstens 10,5 Stunden umfassen.";
     if (/time_frame/.test(msg)) return "Buchbar ist der Zeitraum von 05:00 bis 20:00 Uhr.";
     if (/time_grid/.test(msg)) return "Bitte Uhrzeiten im 30-Minuten-Raster wählen.";
     if (/[äöüÄÖÜß]| Uhr|Buchung|Arbeitsplatz/.test(msg)) return msg; // deutsche Meldung aus der Datenbank
@@ -770,7 +816,7 @@
     if (toISO < fromISO) { showToast("Das Enddatum muss nach dem Startdatum liegen."); return; }
     state.report.logFrom = fromISO; state.report.logTo = toISO;
     state.report.logLoading = true; state.report.logRows = null; render();
-    supabaseClient.from("booking_log").select("id, action, event_at, user_id, acted_by, room_number, workspace_id, booking_date, part, start_time, end_time")
+    supabaseClient.from("booking_log").select("id, action, event_at, user_id, acted_by, room_number, workspace_id, booking_date, part, start_time, end_time, prev_start_time, prev_end_time")
       .gte("event_at", fromISO + "T00:00:00").lte("event_at", toISO + "T23:59:59")
       .order("event_at", { ascending: false })
       .then(function (res) {
@@ -1055,6 +1101,7 @@
     var now = nowMinIfToday(dateISO);
     if (now !== null && now > DAY_START) html += '<div class="tl-seg past" style="left:0;width:' + pctW(DAY_START, Math.min(now, DAY_END)) + '"></div>';
     workspaceBookings(wsId, dateISO).forEach(function (b) {
+      if (opts.excludeId && b.id === opts.excludeId) return;
       var mine = state.profile && b.user_id === state.profile.id;
       var s = Math.max(bStart(b), DAY_START), e = Math.min(bEnd(b), DAY_END);
       html += '<div class="tl-seg ' + (mine ? 'mine' : 'busy') + '" style="left:' + pct(s) + ';width:' + pctW(s, e) + '"></div>';
@@ -1075,7 +1122,11 @@
       var mine = state.profile && b.user_id === state.profile.id;
       var owner = profileById(b.user_id);
       html += '<div class="ws-line ' + (mine ? 'mine' : 'busy') + '"><span><b>' + fmtMin(bStart(b)) + '–' + fmtMin(bEnd(b)) + '</b> ' + (mine ? 'Deine Buchung' : escapeHtml(owner ? owner.full_name : 'belegt')) + '</span>';
-      if (mine) html += '<button type="button" class="mini-cancel" data-cancel-inline="' + b.id + '">stornieren</button>';
+      if (mine) {
+        html += '<span class="line-actions">';
+        if (canEditBooking(b)) html += '<button type="button" class="mini-edit" data-edit="' + b.id + '">anpassen</button>';
+        html += '<button type="button" class="mini-cancel" data-cancel-inline="' + b.id + '">stornieren</button></span>';
+      }
       html += '</div>';
     });
     var free = freeIntervals(wsId, dateISO);
@@ -1148,7 +1199,7 @@
         var d = parseISO(b.booking_date);
         html += '<div class="booking-item"><div><div class="booking-main">' + (room ? escapeHtml(room.label) : b.room_number) + (ws ? " · " + escapeHtml(ws.label) : "") + '</div>';
         html += '<div class="booking-sub">' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + ' · ' + bookingTimeLabel(b) + ' (' + durationLabel(bEnd(b) - bStart(b)) + ')</div></div>';
-        html += '<button class="btn-danger" data-cancel="' + b.id + '">Stornieren</button></div>';
+        html += '<div class="booking-actions">' + (canEditBooking(b) ? '<button class="btn-edit" data-edit="' + b.id + '">Anpassen</button>' : '') + '<button class="btn-danger" data-cancel="' + b.id + '">Stornieren</button></div></div>';
       });
     }
     html += '</div>';
@@ -1367,14 +1418,14 @@
           var owner = profileById(r.user_id);
           var room = findRoomByNumber(r.room_number);
           var ws = room ? room.workspaces.find(function (w) { return w.id === r.workspace_id; }) : null;
-          var actionLabel = r.action === "created" ? "Angelegt" : "Storniert";
+          var actionLabel = r.action === "created" ? "Angelegt" : (r.action === "changed" ? "Geändert" : "Storniert");
           // Gelöschte Konten erscheinen im Protokoll ohne Namen (Verweis wird beim Löschen entfernt)
           var byWhom = escapeHtml(actor ? actor.full_name : "gelöschtes Konto");
           if (owner && (!actor || owner.id !== actor.id)) byWhom += " (für " + escapeHtml(owner.full_name) + ")";
           else if (actor && !owner) byWhom += " (für gelöschtes Konto)";
           var bd = parseISO(r.booking_date);
           html += '<div class="admin-row" style="align-items:flex-start"><span>' + stamp + '<br><span style="color:var(--text-muted)">' + actionLabel + ' von ' + byWhom + '</span></span>';
-          html += '<span style="text-align:right">' + (room ? escapeHtml(room.label) : r.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + '<br><span style="color:var(--text-muted)">' + DOW[bd.getDay()] + ', ' + bd.getDate() + '. ' + MONTHS[bd.getMonth()] + ' · ' + escapeHtml(bookingTimeLabel(r)) + '</span></span></div>';
+          html += '<span style="text-align:right">' + (room ? escapeHtml(room.label) : r.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + '<br><span style="color:var(--text-muted)">' + DOW[bd.getDay()] + ', ' + bd.getDate() + '. ' + MONTHS[bd.getMonth()] + ' · ' + (r.action === "changed" && r.prev_start_time ? escapeHtml(fmtMin(toMin(r.prev_start_time)) + '–' + fmtMin(toMin(r.prev_end_time)) + ' → ') : '') + escapeHtml(bookingTimeLabel(r)) + '</span></span></div>';
         });
       }
     }
@@ -1386,12 +1437,15 @@
   function renderModal() {
     var m = state.modal; if (!m || m.type !== "book") return "";
     var html = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">';
-    html += '<h3>Arbeitsplatz buchen</h3>';
+    var isEdit = m.mode === "edit";
+    html += '<h3>' + (isEdit ? 'Buchung anpassen' : 'Arbeitsplatz buchen') + '</h3>';
     var d = parseISO(m.dateISO);
-    var errs = validateSlot(m.workspace.id, m.dateISO, m.start, m.end);
+    var errs = modalErrors(m);
+    var unchanged = isEdit && m.start === m.origStart && m.end === m.origEnd;
     html += '<div class="confirm-summary">';
     html += '<div class="confirm-row"><span>Arbeitsplatz</span><b>' + escapeHtml(m.room.label) + ' · ' + escapeHtml(m.workspace.label) + '</b></div>';
     html += '<div class="confirm-row"><span>Datum</span><b>' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</b></div>';
+    if (isEdit) html += '<div class="confirm-row"><span>Bisher</span><b>' + rangeLabel(m.origStart, m.origEnd) + '</b></div>';
     html += '</div>';
     html += '<label>Schnellauswahl</label><div class="preset-row">';
     PRESETS.forEach(function (p) {
@@ -1404,11 +1458,11 @@
     html += '</select></div><div><label for="slotEnd">Bis</label><select id="slotEnd">';
     for (var u = DAY_START + STEP_MIN; u <= DAY_END; u += STEP_MIN) html += '<option value="' + u + '"' + (u === m.end ? ' selected' : '') + '>' + fmtMin(u) + ' Uhr</option>';
     html += '</select></div></div>';
-    html += timelineHtml(m.workspace.id, m.dateISO, { sel: [Math.min(m.start, m.end), Math.max(m.start, m.end)], selBad: errs.length > 0 });
-    html += '<div class="duration-note">Dauer: <b>' + (m.end > m.start ? durationLabel(m.end - m.start) : '–') + '</b> <span>(max. 10 Std.)</span></div>';
+    html += timelineHtml(m.workspace.id, m.dateISO, { sel: [Math.min(m.start, m.end), Math.max(m.start, m.end)], selBad: errs.length > 0, excludeId: isEdit ? m.bookingId : null });
+    html += '<div class="duration-note">Dauer: <b>' + (m.end > m.start ? durationLabel(m.end - m.start) : '–') + '</b> <span>(max. 10,5 Std.)</span></div>';
     if (errs.length) html += '<div class="slot-errors">' + errs.map(function (x) { return '<div>' + escapeHtml(x) + '</div>'; }).join('') + '</div>';
     html += '<div class="modal-actions"><button class="btn-secondary" id="modalCancel">Abbrechen</button>';
-    html += '<button class="btn-primary" id="modalConfirm"' + (errs.length || m.busy ? ' disabled' : '') + '>' + (m.busy ? 'Wird gebucht…' : 'Jetzt buchen') + '</button></div></div></div>';
+    html += '<button class="btn-primary" id="modalConfirm"' + (errs.length || m.busy || unchanged ? ' disabled' : '') + '>' + (m.busy ? (isEdit ? 'Wird gespeichert…' : 'Wird gebucht…') : (isEdit ? 'Änderung speichern' : 'Jetzt buchen')) + '</button></div></div></div>';
     return html;
   }
 
@@ -1449,6 +1503,9 @@
         if (!inFree) { showToast("Um " + fmtMin(minute) + " Uhr ist dieser Platz nicht frei."); return; }
         openBookingModal(room, ws, state.selectedDate, minute);
       });
+    });
+    document.querySelectorAll("[data-edit]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) { e.stopPropagation(); openEditModal(btn.getAttribute("data-edit")); });
     });
     document.querySelectorAll("[data-cancel]").forEach(function (btn) { btn.addEventListener("click", function () { cancelBooking(btn.getAttribute("data-cancel")); }); });
     document.querySelectorAll("[data-cancel-inline]").forEach(function (btn) {
