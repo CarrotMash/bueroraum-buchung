@@ -193,6 +193,7 @@
   .empty-state { color: var(--text-muted); font-size: 13px; text-align: center; padding: 26px 10px; }
 
   .btn-primary { background: var(--vak-blue); color: #fff; border: none; border-radius: 10px; padding: 11px 16px; font-size: 13.5px; font-weight: 700; cursor: pointer; width: 100%; }
+  .btn-danger-solid { background: var(--vak-red); }
   .btn-primary:disabled { opacity: 0.45; cursor: default; }
   .btn-link { background: none; border: none; color: var(--vak-blue-light); font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 4px 0; }
   select, input[type="date"], input[type="email"], input[type="password"], input[type="text"] {
@@ -626,8 +627,17 @@
     return "Buchung fehlgeschlagen: " + msg;
   }
 
+  // Sicherheitsabfrage vor dem Stornieren
+  function askCancelBooking(id) {
+    var b = state.bookings.find(function (x) { return x.id === id; });
+    if (!b) return;
+    state.modal = { type: "cancel", bookingId: id, booking: b, busy: false };
+    render();
+  }
+
   function cancelBooking(id) {
     supabaseClient.from("bookings").delete().eq("id", id).then(function (res) {
+      if (state.modal && state.modal.type === "cancel") state.modal = null;
       if (res.error) { showToast("Stornieren fehlgeschlagen."); console.error(res.error); return; }
       showToast("Buchung storniert."); loadBookings();
     });
@@ -1435,7 +1445,22 @@
   }
 
   function renderModal() {
-    var m = state.modal; if (!m || m.type !== "book") return "";
+    var m = state.modal; if (!m) return "";
+    if (m.type === "cancel") {
+      var cb = m.booking, cd = parseISO(cb.booking_date);
+      var ch = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">';
+      ch += '<h3>Buchung wirklich stornieren?</h3>';
+      ch += '<div class="confirm-summary">';
+      ch += '<div class="confirm-row"><span>Arbeitsplatz</span><b>' + escapeHtml(workspaceLabelFor(cb)) + '</b></div>';
+      ch += '<div class="confirm-row"><span>Datum</span><b>' + DOW[cd.getDay()] + ', ' + cd.getDate() + '. ' + MONTHS[cd.getMonth()] + '</b></div>';
+      ch += '<div class="confirm-row"><span>Zeitraum</span><b>' + escapeHtml(bookingTimeLabel(cb)) + '</b></div>';
+      ch += '</div>';
+      ch += '<div class="modal-sub">Der Platz wird damit für andere wieder freigegeben. Das lässt sich nicht rückgängig machen – bei Bedarf einfach neu buchen.</div>';
+      ch += '<div class="modal-actions"><button class="btn-secondary" id="modalCancel">Behalten</button>';
+      ch += '<button class="btn-primary btn-danger-solid" id="modalConfirm"' + (m.busy ? ' disabled' : '') + '>' + (m.busy ? 'Wird storniert…' : 'Ja, stornieren') + '</button></div></div></div>';
+      return ch;
+    }
+    if (m.type !== "book") return "";
     var html = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">';
     var isEdit = m.mode === "edit";
     html += '<h3>' + (isEdit ? 'Buchung anpassen' : 'Arbeitsplatz buchen') + '</h3>';
@@ -1507,9 +1532,9 @@
     document.querySelectorAll("[data-edit]").forEach(function (btn) {
       btn.addEventListener("click", function (e) { e.stopPropagation(); openEditModal(btn.getAttribute("data-edit")); });
     });
-    document.querySelectorAll("[data-cancel]").forEach(function (btn) { btn.addEventListener("click", function () { cancelBooking(btn.getAttribute("data-cancel")); }); });
+    document.querySelectorAll("[data-cancel]").forEach(function (btn) { btn.addEventListener("click", function () { askCancelBooking(btn.getAttribute("data-cancel")); }); });
     document.querySelectorAll("[data-cancel-inline]").forEach(function (btn) {
-      btn.addEventListener("click", function (e) { e.stopPropagation(); cancelBooking(btn.getAttribute("data-cancel-inline")); });
+      btn.addEventListener("click", function (e) { e.stopPropagation(); askCancelBooking(btn.getAttribute("data-cancel-inline")); });
     });
     document.querySelectorAll("[data-rmvac]").forEach(function (btn) { btn.addEventListener("click", function () { removeVacation(btn.getAttribute("data-rmvac")); }); });
 
@@ -1584,7 +1609,11 @@
     if (backdrop) {
       backdrop.addEventListener("click", function (e) { if (e.target === backdrop) closeModal(); });
       document.getElementById("modalCancel").addEventListener("click", closeModal);
-      document.getElementById("modalConfirm").addEventListener("click", confirmBooking);
+      document.getElementById("modalConfirm").addEventListener("click", function () {
+        var m = state.modal;
+        if (m && m.type === "cancel") { if (m.busy) return; m.busy = true; render(); cancelBooking(m.bookingId); }
+        else confirmBooking();
+      });
       document.querySelectorAll("[data-preset]").forEach(function (btn) {
         btn.addEventListener("click", function () {
           var p = PRESETS.find(function (x) { return x.key === btn.getAttribute("data-preset"); });
