@@ -237,6 +237,26 @@
   .login-wrap h2 { margin: 0 0 4px; font-size: 19px; color: var(--text); text-align: center; }
   .login-wrap p.intro { color: var(--text-muted); font-size: 13.5px; margin-top: 4px; text-align: center; }
   .auth-field { margin-bottom: 14px; }
+  .date-pick { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .date-pick input { flex: 1; margin-top: 6px; }
+  .cal-btn { margin-top: 6px; border: 1px solid var(--border); background: var(--card-bg); border-radius: 9px; padding: 8px 11px; font-size: 16px; cursor: pointer; }
+  .cal-btn.open { border-color: var(--vak-blue); background: var(--name-accent-bg); }
+  .vcal { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 0 0 12px; background: var(--card-bg); box-shadow: var(--shadow); }
+  .vcal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+  .vcal-nav { border: none; background: var(--bg); color: var(--text); border-radius: 8px; width: 34px; height: 30px; font-size: 18px; cursor: pointer; }
+  .vcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+  .vcal-dow { font-size: 10.5px; color: var(--text-muted); font-weight: 600; padding-bottom: 2px; }
+  .vcal-day { border: none; background: var(--bg); color: var(--text); border-radius: 8px; padding: 8px 0; font-size: 13px; cursor: pointer; }
+  .vcal-day.we { color: var(--text-muted); background: transparent; }
+  .vcal-day.today { box-shadow: inset 0 0 0 1.5px var(--vak-blue-light); }
+  .vcal-day.vac { background: var(--permanent); color: var(--permanent-text); }
+  .vcal-day.inrange { background: var(--name-accent-bg); color: var(--name-accent); }
+  .vcal-day.sel { background: var(--vak-blue); color: #fff; font-weight: 700; }
+  .vcal-day:disabled { opacity: .3; cursor: default; }
+  .vcal-foot { display: flex; gap: 14px; font-size: 10.5px; color: var(--text-muted); margin-top: 8px; }
+  .vcal-foot .lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+  .vcal-foot .lg.vac { background: var(--permanent); border: 1px solid var(--permanent-border); }
+  .vcal-foot .lg.we { border: 1px solid var(--border); }
   .name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .auth-error { background: var(--busy); color: var(--busy-text); border-radius: 9px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 14px; }
   .auth-info { background: var(--free); color: var(--free-text); border-radius: 9px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 14px; }
@@ -338,7 +358,12 @@
     { key: "FULL", label: "Ganztags", start: 8 * 60, end: 16 * 60 }
   ];
   // Persönliche Lieblingszeit (in den Profildaten gespeichert)
+  // Wer einen festen Arbeitsplatz hat, braucht (und bekommt) keine Favoriten
+  function hasPermanentDesk() {
+    return !!state.profile && Object.keys(state.permanentAssignments).some(function (wsId) { return state.permanentAssignments[wsId] === state.profile.id; });
+  }
   function myFavorite() {
+    if (hasPermanentDesk()) return null;
     var pr = state.profile;
     if (!pr || !pr.favorite_start || !pr.favorite_end) return null;
     return { key: "FAV", label: "Mein Favorit", start: toMin(pr.favorite_start), end: toMin(pr.favorite_end), fav: true };
@@ -349,6 +374,7 @@
   }
   // Lieblingsplatz (nur Plätze der eigenen Gruppe)
   function myFavoriteWorkspace() {
+    if (hasPermanentDesk()) return null;
     var pr = state.profile;
     if (!pr || !pr.favorite_workspace_id) return null;
     var hit = null;
@@ -403,6 +429,7 @@
     permanentAssignments: {},   // workspace_id -> user_id
     modal: null,
     toastMsg: null,
+    vacForm: { start: "", end: "", open: null, calMonth: "" }, // Urlaubseingabe inkl. aufgeklapptem Kalender
     authMode: "login",      // 'login' | 'register'
     authDraft: { firstName: "", lastName: "", groupId: "", email: "", password: "" }, // Eingaben bleiben bei Fehlern erhalten
     authFocus: null,
@@ -758,6 +785,7 @@
     if (!toInsert.length) { showToast("Dieser Zeitraum ist bereits vollständig eingetragen."); return; }
     supabaseClient.from("vacations").insert(toInsert).then(function (res) {
       if (res.error) { showToast("Eintragen fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      state.vacForm = { start: "", end: "", open: null, calMonth: "" };
       showToast(toInsert.length + " Urlaubstag(e) eingetragen.");
       loadVacations();
     });
@@ -1344,23 +1372,26 @@
     var mine = state.bookings.filter(function (b) { return b.user_id === state.profile.id; }).sort(function (a, b) { return a.booking_date.localeCompare(b.booking_date) || byStart(a, b); });
     var fav = myFavorite();
     var fws = myFavoriteWorkspace();
-    var html = '<div class="card fav-card"><h3>★ Meine Favoriten</h3>';
-    html += '<div class="booking-sub" style="margin-bottom:10px">Lieblingsplatz und Lieblingszeit werden beim Buchen vorgeschlagen; oben in „Buchen“ erscheint dafür eine Schnellbuchung.</div>';
-    html += '<label for="favWs">Lieblingsplatz</label><select id="favWs"><option value="">– kein Lieblingsplatz –</option>';
-    roomsForGroup(state.profile.group_id).forEach(function (room) {
+    var html = '';
+    if (!hasPermanentDesk()) {
+      html += '<div class="card fav-card"><h3>★ Meine Favoriten</h3>';
+      html += '<div class="booking-sub" style="margin-bottom:10px">Lieblingsplatz und Lieblingszeit werden beim Buchen vorgeschlagen; oben in „Buchen“ erscheint dafür eine Schnellbuchung.</div>';
+      html += '<label for="favWs">Lieblingsplatz</label><select id="favWs"><option value="">– kein Lieblingsplatz –</option>';
+      roomsForGroup(state.profile.group_id).forEach(function (room) {
       room.workspaces.forEach(function (ws) {
         var lockedForOthers = state.permanentAssignments[ws.id] && state.permanentAssignments[ws.id] !== state.profile.id;
         html += '<option value="' + escapeHtml(ws.id) + '"' + (fws && fws.ws.id === ws.id ? ' selected' : '') + '>' + escapeHtml(room.label + ' · ' + ws.label) + (lockedForOthers ? ' (dauerhaft vergeben)' : '') + '</option>';
       });
     });
-    html += '</select>';
-    html += '<div class="time-row" style="margin-top:12px"><div><label for="favFrom">Lieblingszeit von</label><select id="favFrom"><option value="">–</option>';
-    for (var ft = DAY_START; ft < DAY_END; ft += STEP_MIN) html += '<option value="' + ft + '"' + (fav && fav.start === ft ? ' selected' : '') + '>' + fmtMin(ft) + ' Uhr</option>';
-    html += '</select></div><div><label for="favTo">bis</label><select id="favTo"><option value="">–</option>';
-    for (var fu = DAY_START + STEP_MIN; fu <= DAY_END; fu += STEP_MIN) html += '<option value="' + fu + '"' + (fav && fav.end === fu ? ' selected' : '') + '>' + fmtMin(fu) + ' Uhr</option>';
-    html += '</select></div></div>';
-    html += '<div class="modal-actions"><button class="btn-secondary" id="favClearAll"' + (!fav && !fws ? ' disabled' : '') + '>Entfernen</button><button class="btn-primary" id="favSaveAll">Favoriten speichern</button></div>';
-    html += '</div>';
+      html += '</select>';
+      html += '<div class="time-row" style="margin-top:12px"><div><label for="favFrom">Lieblingszeit von</label><select id="favFrom"><option value="">–</option>';
+      for (var ft = DAY_START; ft < DAY_END; ft += STEP_MIN) html += '<option value="' + ft + '"' + (fav && fav.start === ft ? ' selected' : '') + '>' + fmtMin(ft) + ' Uhr</option>';
+      html += '</select></div><div><label for="favTo">bis</label><select id="favTo"><option value="">–</option>';
+      for (var fu = DAY_START + STEP_MIN; fu <= DAY_END; fu += STEP_MIN) html += '<option value="' + fu + '"' + (fav && fav.end === fu ? ' selected' : '') + '>' + fmtMin(fu) + ' Uhr</option>';
+      html += '</select></div></div>';
+      html += '<div class="modal-actions"><button class="btn-secondary" id="favClearAll"' + (!fav && !fws ? ' disabled' : '') + '>Entfernen</button><button class="btn-primary" id="favSaveAll">Favoriten speichern</button></div>';
+      html += '</div>';
+    }
     html += '<div class="card"><h3>Meine Buchungen</h3>';
     if (!mine.length) { html += '<div class="empty-state">Noch keine Buchungen vorhanden.</div>'; }
     else {
@@ -1374,6 +1405,37 @@
       });
     }
     html += '</div>';
+    return html;
+  }
+
+  var MONTH_NAMES = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+  // Aufklappbarer Monatskalender für Von/Bis beim Urlaub (Tag antippen = übernehmen)
+  function vacCalendarHtml(which) {
+    var vf = state.vacForm;
+    var ym = vf.calMonth.split("-"); var y = parseInt(ym[0], 10), mo = parseInt(ym[1], 10) - 1;
+    var first = new Date(y, mo, 1), days = new Date(y, mo + 1, 0).getDate();
+    var lead = (first.getDay() + 6) % 7; // Montag zuerst
+    var today = fmtISO(new Date());
+    var myVac = {};
+    state.vacations.forEach(function (v) { if (v.user_id === state.profile.id) myVac[v.vacation_date] = true; });
+    var html = '<div class="vcal" data-vcal="' + which + '">';
+    html += '<div class="vcal-head"><button type="button" class="vcal-nav" data-vcal-nav="-1" aria-label="Vormonat">‹</button><b>' + MONTH_NAMES[mo] + ' ' + y + '</b><button type="button" class="vcal-nav" data-vcal-nav="1" aria-label="Folgemonat">›</button></div>';
+    html += '<div class="vcal-grid">';
+    ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].forEach(function (d) { html += '<span class="vcal-dow">' + d + '</span>'; });
+    for (var k = 0; k < lead; k++) html += '<span></span>';
+    for (var d = 1; d <= days; d++) {
+      var iso = y + "-" + pad(mo + 1) + "-" + pad(d);
+      var wd = new Date(y, mo, d).getDay();
+      var cls = "vcal-day";
+      if (wd === 0 || wd === 6) cls += " we";
+      if (iso === vf.start || iso === vf.end) cls += " sel";
+      else if (vf.start && vf.end && iso > vf.start && iso < vf.end) cls += " inrange";
+      if (myVac[iso]) cls += " vac";
+      if (iso === today) cls += " today";
+      var disabled = iso < today || (which === "end" && vf.start && iso < vf.start);
+      html += '<button type="button" class="' + cls + '" data-vcal-day="' + iso + '"' + (disabled ? ' disabled' : '') + '>' + d + '</button>';
+    }
+    html += '</div><div class="vcal-foot"><span><i class="lg vac"></i>bereits Urlaub</span><span><i class="lg we"></i>Wochenende</span></div></div>';
     return html;
   }
 
@@ -1394,8 +1456,11 @@
     var mine = state.vacations.filter(function (v) { return v.user_id === state.profile.id; }).sort(function (a, b) { return a.vacation_date.localeCompare(b.vacation_date); });
     var html = '<div class="card"><h3>Urlaub eintragen</h3>';
     html += '<div class="banner">Dir ist ' + escapeHtml(myLabels) + ' dauerhaft zugewiesen. An deinen Urlaubstagen wird der Platz automatisch für andere buchbar.</div>';
-    html += '<label for="vacStart">Von</label><input type="date" id="vacStart" min="' + fmtISO(new Date()) + '">';
-    html += '<label for="vacEnd">Bis</label><input type="date" id="vacEnd" min="' + fmtISO(new Date()) + '">';
+    var vf = state.vacForm;
+    html += '<label for="vacStart">Von</label><div class="date-pick"><input type="date" id="vacStart" min="' + fmtISO(new Date()) + '" value="' + escapeHtml(vf.start) + '"><button type="button" class="cal-btn' + (vf.open === "start" ? ' open' : '') + '" data-vcal-open="start" aria-label="Kalender für Startdatum">📅</button></div>';
+    if (vf.open === "start") html += vacCalendarHtml("start");
+    html += '<label for="vacEnd">Bis</label><div class="date-pick"><input type="date" id="vacEnd" min="' + escapeHtml(vf.start || fmtISO(new Date())) + '" value="' + escapeHtml(vf.end) + '"><button type="button" class="cal-btn' + (vf.open === "end" ? ' open' : '') + '" data-vcal-open="end" aria-label="Kalender für Enddatum">📅</button></div>';
+    if (vf.open === "end") html += vacCalendarHtml("end");
     html += '<div class="booking-sub" style="margin-top:8px">Es werden nur Werktage (Mo–Fr) im gewählten Zeitraum eingetragen, Wochenenden automatisch übersprungen.</div>';
     html += '<div style="height:10px"></div><button class="btn-primary" id="addVacBtn">Urlaubszeitraum eintragen</button></div>';
     html += '<div class="card"><h3>Meine Urlaubstage</h3>';
@@ -1649,7 +1714,7 @@
     var selOk = m.end > m.start && m.start >= DAY_START && m.end <= DAY_END && m.end - m.start <= MAX_DURATION;
     if (favNow && favNow.start === m.start && favNow.end === m.end) {
       html += '<div class="fav-line">★ Das ist deine Lieblingszeit · <button type="button" class="link-btn" id="favRemove">Favorit entfernen</button></div>';
-    } else if (selOk) {
+    } else if (selOk && !hasPermanentDesk()) {
       html += '<div class="fav-line"><button type="button" class="link-btn" id="favSave">☆ ' + rangeLabel(m.start, m.end) + ' als Favorit speichern</button>' + (favNow ? ' <span>(ersetzt ' + fmtMin(favNow.start) + '–' + fmtMin(favNow.end) + ')</span>' : '') + '</div>';
     }
     html += '<div class="duration-note">Dauer: <b>' + (m.end > m.start ? durationLabel(m.end - m.start) : '–') + '</b> <span>(max. 10,5 Std.)</span></div>';
@@ -1707,6 +1772,42 @@
     });
     document.querySelectorAll("[data-rmvac]").forEach(function (btn) { btn.addEventListener("click", function () { removeVacation(btn.getAttribute("data-rmvac")); }); });
 
+    var vacStartEl = document.getElementById("vacStart"), vacEndEl = document.getElementById("vacEnd");
+    if (vacStartEl) vacStartEl.addEventListener("change", function () {
+      state.vacForm.start = vacStartEl.value;
+      if (state.vacForm.end && state.vacForm.end < state.vacForm.start) state.vacForm.end = "";
+      render();
+    });
+    if (vacEndEl) vacEndEl.addEventListener("change", function () { state.vacForm.end = vacEndEl.value; render(); });
+    document.querySelectorAll("[data-vcal-open]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var which = btn.getAttribute("data-vcal-open"), vf = state.vacForm;
+        if (vf.open === which) { vf.open = null; render(); return; }
+        vf.open = which;
+        var base = (which === "end" ? (vf.end || vf.start) : vf.start) || fmtISO(new Date());
+        vf.calMonth = base.slice(0, 7);
+        render();
+      });
+    });
+    document.querySelectorAll("[data-vcal-nav]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var ym = state.vacForm.calMonth.split("-");
+        var d = new Date(parseInt(ym[0], 10), parseInt(ym[1], 10) - 1 + parseInt(btn.getAttribute("data-vcal-nav"), 10), 1);
+        state.vacForm.calMonth = d.getFullYear() + "-" + pad(d.getMonth() + 1);
+        render();
+      });
+    });
+    document.querySelectorAll("[data-vcal-day]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var iso = btn.getAttribute("data-vcal-day"), vf = state.vacForm;
+        if (vf.open === "start") {
+          vf.start = iso;
+          if (!vf.end || vf.end < iso) { vf.end = vf.end && vf.end >= iso ? vf.end : ""; vf.open = "end"; vf.calMonth = iso.slice(0, 7); }
+          else vf.open = null;
+        } else { vf.end = iso; vf.open = null; }
+        render();
+      });
+    });
     var addVacBtn = document.getElementById("addVacBtn");
     if (addVacBtn) addVacBtn.addEventListener("click", function () {
       var startVal = document.getElementById("vacStart").value;
