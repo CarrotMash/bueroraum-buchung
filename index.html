@@ -504,6 +504,9 @@
     if (y >= 2018) add(new Date(y, 9, 31), "Reformationstag");
     add(new Date(y, 11, 25), "1. Weihnachtstag");
     add(new Date(y, 11, 26), "2. Weihnachtstag");
+    // Bei der VAK zusätzlich dienstfrei (keine gesetzlichen Feiertage)
+    add(new Date(y, 11, 24), "Heiligabend (dienstfrei)");
+    add(new Date(y, 11, 31), "Silvester (dienstfrei)");
     _holidayCache[y] = out;
     return out;
   }
@@ -999,7 +1002,7 @@
   var APP_VERSIONS = [
     { v: "2.2", date: "2026-11-04", items: [
       "Neuer Admin-Bereich „Auswertungen“: Zeitauslastung (gebuchte Stunden im Verhältnis zu 05–20 Uhr an allen Arbeitstagen) und Nutzungstage (Tage mit mindestens einer Buchung) je Arbeitsplatz – für Woche, Monat, Jahr oder einen frei wählbaren Zeitraum (mit Kalender), für alle oder einzelne Raumgruppen, als PDF-Ausdruck. Ohne personenbezogene Daten.",
-      "Gesetzliche Feiertage in Schleswig-Holstein (§ 2 Sonn- und Feiertagsgesetz) werden berücksichtigt: in der Tagesleiste ausgegraut und nicht buchbar, beim Eintragen von Urlaub übersprungen, in Auswertungen nicht als Arbeitstag gezählt. Einmalige Feiertage (§ 2 Abs. 2) können in der Systemverwaltung gepflegt werden.",
+      "Gesetzliche Feiertage in Schleswig-Holstein (§ 2 Sonn- und Feiertagsgesetz) werden berücksichtigt: in der Tagesleiste ausgegraut und nicht buchbar, beim Eintragen von Urlaub übersprungen, in Auswertungen nicht als Arbeitstag gezählt. Heiligabend und Silvester gelten als dienstfrei und werden ebenso behandelt. Einmalige Feiertage (§ 2 Abs. 2) können in der Systemverwaltung gepflegt werden.",
       "Versionsdokumentation mit PDF-Ausdruck; aktuelle Version in der Fußzeile."
     ] },
     { v: "2.1", date: "2026-11-03", items: [
@@ -1998,8 +2001,8 @@
       Object.keys(m).sort().forEach(function (iso) { if (iso >= todayIso && upcoming.length < 12) upcoming.push({ iso: iso, name: m[iso] }); });
     });
     html += '<div class="card"><h3>Feiertage</h3>';
-    html += '<div class="modal-sub">Die gesetzlichen Feiertage in Schleswig-Holstein (§ 2 Abs. 1 Sonn- und Feiertagsgesetz) werden automatisch berechnet und sind nicht buchbar. Einmalige zusätzliche Feiertage (§ 2 Abs. 2, z. B. per Landesverordnung) bitte hier eintragen.</div>';
-    html += '<div class="booking-sub" style="margin-bottom:6px"><b>Nächste gesetzliche Feiertage:</b></div>';
+    html += '<div class="modal-sub">Die gesetzlichen Feiertage in Schleswig-Holstein (§ 2 Abs. 1 Sonn- und Feiertagsgesetz) werden automatisch berechnet und sind nicht buchbar; ebenso Heiligabend und Silvester, die bei der VAK dienstfrei sind. Einmalige zusätzliche Feiertage (§ 2 Abs. 2, z. B. per Landesverordnung) bitte hier eintragen.</div>';
+    html += '<div class="booking-sub" style="margin-bottom:6px"><b>Nächste Feiertage und dienstfreie Tage:</b></div>';
     upcoming.forEach(function (x) { var d = parseISO(x.iso); html += '<div class="admin-row"><span>' + DOW[d.getDay()] + ', ' + fmtDE(x.iso) + '</span><span>' + escapeHtml(x.name) + '</span></div>'; });
     html += '<div class="booking-sub" style="margin:14px 0 6px"><b>Zusätzliche Feiertage:</b></div>';
     if (!state.extraHolidaysOk) {

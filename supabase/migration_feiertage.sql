@@ -10,7 +10,9 @@
 -- Einmalige Feiertage nach § 2 Abs. 2 (Verordnung der Landesregierung)
 -- pflegen Admins in der Tabelle holidays_extra (Systemverwaltung).
 --
--- An Feiertagen und Wochenenden sind keine Buchungen möglich.
+-- Zusätzlich bei der VAK dienstfrei: Heiligabend (24.12.) und Silvester (31.12.).
+--
+-- An Feiertagen, dienstfreien Tagen und Wochenenden sind keine Buchungen möglich.
 -- =====================================================================
 
 begin;
@@ -62,6 +64,9 @@ begin
   if d = make_date(y, 10, 31) and y >= 2018 then return 'Reformationstag'; end if;
   if d = make_date(y, 12, 25) then return '1. Weihnachtstag'; end if;
   if d = make_date(y, 12, 26) then return '2. Weihnachtstag'; end if;
+  -- bei der VAK zusätzlich dienstfrei (keine gesetzlichen Feiertage)
+  if d = make_date(y, 12, 24) then return 'Heiligabend (dienstfrei)'; end if;
+  if d = make_date(y, 12, 31) then return 'Silvester (dienstfrei)'; end if;
   select name into extra from public.holidays_extra where holiday_date = d;
   return extra;
 end;
@@ -91,7 +96,7 @@ begin
   end if;
   hol := public.sh_holiday_name(new.booking_date);
   if hol is not null then
-    raise exception 'Am % (%) ist Feiertag – Buchungen sind nicht möglich.', to_char(new.booking_date, 'DD.MM.YYYY'), hol using errcode = 'P0001';
+    raise exception 'Am % ist % – an diesem Tag sind keine Buchungen möglich.', to_char(new.booking_date, 'DD.MM.YYYY'), hol using errcode = 'P0001';
   end if;
 
   select exists(
