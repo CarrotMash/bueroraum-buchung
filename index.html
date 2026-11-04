@@ -1003,7 +1003,8 @@
     { v: "2.2", date: "2026-11-04", items: [
       "Neuer Admin-Bereich „Auswertungen“: Zeitauslastung (gebuchte Stunden im Verhältnis zu 05–20 Uhr an allen Arbeitstagen) und Nutzungstage (Tage mit mindestens einer Buchung) je Arbeitsplatz – für Woche, Monat, Jahr oder einen frei wählbaren Zeitraum (mit Kalender), für alle oder einzelne Raumgruppen, als PDF-Ausdruck. Ohne personenbezogene Daten.",
       "Gesetzliche Feiertage in Schleswig-Holstein (§ 2 Sonn- und Feiertagsgesetz) werden berücksichtigt: in der Tagesleiste ausgegraut und nicht buchbar, beim Eintragen von Urlaub übersprungen, in Auswertungen nicht als Arbeitstag gezählt. Heiligabend und Silvester gelten als dienstfrei und werden ebenso behandelt. Einmalige Feiertage (§ 2 Abs. 2) können in der Systemverwaltung gepflegt werden.",
-      "Versionsdokumentation mit PDF-Ausdruck; aktuelle Version in der Fußzeile."
+      "Versionsdokumentation mit PDF-Ausdruck; aktuelle Version in der Fußzeile.",
+      "Unter „Meine“ heißt der Bereich jetzt „Mein Favorit“ (Einzahl), da genau ein Lieblingsplatz mit einer Lieblingszeit hinterlegt werden kann."
     ] },
     { v: "2.1", date: "2026-11-03", items: [
       "Urlaub: aufklappbarer Monatskalender zur Auswahl von Start- und Enddatum.",
@@ -1778,7 +1779,7 @@
     var fws = myFavoriteWorkspace();
     var html = '';
     if (!hasPermanentDesk()) {
-      html += '<div class="card fav-card"><h3>★ Meine Favoriten</h3>';
+      html += '<div class="card fav-card"><h3>★ Mein Favorit</h3>';
       html += '<div class="booking-sub" style="margin-bottom:10px">Lieblingsplatz und Lieblingszeit werden beim Buchen vorgeschlagen; oben in „Buchen“ erscheint dafür eine Schnellbuchung.</div>';
       html += '<label for="favWs">Lieblingsplatz</label><select id="favWs"><option value="">– kein Lieblingsplatz –</option>';
       roomsForGroup(state.profile.group_id).forEach(function (room) {
@@ -1793,7 +1794,7 @@
       html += '</select></div><div><label for="favTo">bis</label><select id="favTo"><option value="">–</option>';
       for (var fu = DAY_START + STEP_MIN; fu <= DAY_END; fu += STEP_MIN) html += '<option value="' + fu + '"' + (fav && fav.end === fu ? ' selected' : '') + '>' + fmtMin(fu) + ' Uhr</option>';
       html += '</select></div></div>';
-      html += '<div class="modal-actions"><button class="btn-secondary" id="favClearAll"' + (!fav && !fws ? ' disabled' : '') + '>Entfernen</button><button class="btn-primary" id="favSaveAll">Favoriten speichern</button></div>';
+      html += '<div class="modal-actions"><button class="btn-secondary" id="favClearAll"' + (!fav && !fws ? ' disabled' : '') + '>Entfernen</button><button class="btn-primary" id="favSaveAll">Favorit speichern</button></div>';
       html += '</div>';
     }
     html += '<div class="card"><h3>Meine Buchungen</h3>';
@@ -2266,11 +2267,11 @@
         if (fe - fs > MAX_DURATION) { showToast("Die Lieblingszeit darf höchstens 10,5 Stunden umfassen."); return; }
         fields.favorite_start = fmtMin(fs); fields.favorite_end = fmtMin(fe);
       }
-      saveFavorites(fields, "Favoriten gespeichert.");
+      saveFavorites(fields, "Favorit gespeichert.");
     });
     var favClearAll = document.getElementById("favClearAll");
     if (favClearAll) favClearAll.addEventListener("click", function () {
-      saveFavorites({ favorite_workspace_id: null, favorite_start: null, favorite_end: null }, "Favoriten entfernt.");
+      saveFavorites({ favorite_workspace_id: null, favorite_start: null, favorite_end: null }, "Favorit entfernt.");
     });
     var favBook = document.querySelector("[data-favbook]"), favOther = document.querySelector("[data-favother]");
     if (favBook || favOther) {

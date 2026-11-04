@@ -8,6 +8,7 @@ Quelle: Liste `APP_VERSIONS` in `index.html` (in der App unter „Auswertungen�
 - Neuer Admin-Bereich „Auswertungen“: Zeitauslastung (gebuchte Stunden im Verhältnis zu 05–20 Uhr an allen Arbeitstagen) und Nutzungstage (Tage mit mindestens einer Buchung) je Arbeitsplatz – für Woche, Monat, Jahr oder einen frei wählbaren Zeitraum (mit Kalender), für alle oder einzelne Raumgruppen, als PDF-Ausdruck. Ohne personenbezogene Daten.
 - Gesetzliche Feiertage in Schleswig-Holstein (§ 2 Sonn- und Feiertagsgesetz) werden berücksichtigt: in der Tagesleiste ausgegraut und nicht buchbar, beim Eintragen von Urlaub übersprungen, in Auswertungen nicht als Arbeitstag gezählt. Heiligabend und Silvester gelten als dienstfrei und werden ebenso behandelt. Einmalige Feiertage (§ 2 Abs. 2) können in der Systemverwaltung gepflegt werden.
 - Versionsdokumentation mit PDF-Ausdruck; aktuelle Version in der Fußzeile.
+- Unter „Meine“ heißt der Bereich jetzt „Mein Favorit“ (Einzahl), da genau ein Lieblingsplatz mit einer Lieblingszeit hinterlegt werden kann.
 
 ## Version 2.1 – 03.11.2026
 
