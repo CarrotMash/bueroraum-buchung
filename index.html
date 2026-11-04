@@ -126,6 +126,9 @@
   .date-chip .dow { display: block; font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; }
   .date-chip .dom { display: block; font-weight: 700; font-size: 15px; margin-top: 2px; }
   .date-chip.active { background: var(--vak-blue); border-color: var(--vak-blue); color: #fff; }
+  .date-chip.holiday { background: var(--locked); border-color: var(--locked-border); color: var(--locked-text); cursor: not-allowed; opacity: .75; }
+  .date-chip.holiday:hover { transform: none; box-shadow: none; }
+  .date-chip .hol { display: block; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; margin-top: 1px; }
   .date-chip.active .dow { color: #cfe0ee; }
 
   .room-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); transition: box-shadow .15s; }
@@ -249,6 +252,8 @@
   .vcal-day { border: none; background: var(--bg); color: var(--text); border-radius: 8px; padding: 8px 0; font-size: 13px; cursor: pointer; }
   .vcal-day.we { color: var(--text-muted); background: transparent; }
   .vcal-day.today { box-shadow: inset 0 0 0 1.5px var(--vak-blue-light); }
+  .vcal-day.hol { background: var(--locked); color: var(--locked-text); text-decoration: line-through; }
+  .vcal-foot .lg.hol { background: var(--locked); border: 1px solid var(--locked-border); }
   .vcal-day.vac { background: var(--permanent); color: var(--permanent-text); }
   .vcal-day.inrange { background: var(--name-accent-bg); color: var(--name-accent); }
   .vcal-day.sel { background: var(--vak-blue); color: #fff; font-weight: 700; }
@@ -276,6 +281,29 @@
   .btn-secondary { flex: 1; background: var(--locked); color: var(--text); border: none; border-radius: 10px; padding: 11px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
 
   footer.app-footer { text-align: center; padding: 18px; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border); background: var(--card-bg); }
+  .app-version { margin-top: 4px; font-size: 10px; opacity: .8; }
+  .rep-modes { grid-template-columns: repeat(4, 1fr); }
+  .rep-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg); border-radius: 10px; padding: 6px; margin: 0 0 12px; font-size: 13.5px; }
+  .rep-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .rep-total { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .rep-total > div { background: var(--bg); border-radius: 10px; padding: 10px; }
+  .rep-total span { display: block; font-size: 11px; color: var(--text-muted); }
+  .rep-total b { font-size: 18px; color: var(--name-accent); }
+  .rep-row { padding: 9px 0; border-top: 1px solid var(--border); }
+  .rep-row:first-of-type { border-top: none; }
+  .rep-ws { font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+  .rep-tag { display: inline-block; font-size: 10px; font-weight: 600; background: var(--permanent); color: var(--permanent-text); border-radius: 6px; padding: 1px 6px; vertical-align: 1px; }
+  .rep-metric { display: grid; grid-template-columns: 34px 1fr 52px; align-items: center; gap: 8px; font-size: 12px; margin: 3px 0; }
+  .rep-metric span { color: var(--text-muted); }
+  .rep-metric b { text-align: right; }
+  .rep-metric small { grid-column: 2 / 4; margin-top: -2px; color: var(--text-muted); font-size: 10.5px; }
+  .ubar { display: block; height: 8px; border-radius: 4px; background: var(--locked); overflow: hidden; }
+  .ubar i { display: block; height: 100%; background: var(--vak-blue); border-radius: 4px; }
+  .rep-total .ubar { margin-top: 6px; }
+  details.vers { border-top: 1px solid var(--border); padding: 8px 0; }
+  details.vers summary { cursor: pointer; font-size: 13px; }
+  details.vers ul { margin: 6px 0 2px; padding-left: 18px; font-size: 12.5px; color: var(--text); }
+  details.vers li { margin: 3px 0; }
   footer.app-footer a { color: var(--text-muted); text-decoration: underline; cursor: pointer; }
 
   .toast { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--vak-blue); color: #fff; padding: 10px 18px; border-radius: 30px; font-size: 12.5px; font-weight: 600; z-index: 60; box-shadow: 0 6px 18px rgba(0,0,0,0.18); max-width: 90vw; text-align: center; }
@@ -407,10 +435,8 @@
   }
 
   // Nur noch für alte Protokolleinträge ohne Uhrzeit
-  // Bereich "Auswertungen" (Buchungshäufigkeit, Buchungsprotokoll) aus Datenschutzgründen und
-  // mit Blick auf die Mitbestimmung des Personalrats deaktiviert. Wieder einschalten: true setzen
-  // UND die Lese-Berechtigung auf booking_log in der Datenbank wiederherstellen (siehe supabase/).
-  var REPORTS_ENABLED = false;
+  // Das frühere Buchungsprotokoll (booking_log) bleibt aus Datenschutzgründen gesperrt; der Bereich
+  // "Auswertungen" zeigt nur noch personenunabhängige Auslastungszahlen je Arbeitsplatz (nur Admins).
   var LEGACY_PART_LABEL = { AM: "Vormittag", PM: "Nachmittag", FULL: "Ganztags" };
   var WORKDAY_COUNT = 10;
 
@@ -430,18 +456,19 @@
     modal: null,
     toastMsg: null,
     vacForm: { start: "", end: "", open: null, calMonth: "" }, // Urlaubseingabe inkl. aufgeklapptem Kalender
+    repForm: { mode: "month", anchor: "", start: "", end: "", open: null, calMonth: "", group: "all", result: null, loading: false }, // Auswertungen
+    extraHolidays: [],        // einmalige Feiertage (§ 2 Abs. 2 SFTG), von Admins gepflegt
+    extraHolidaysOk: true,    // false, solange die Datenbank-Tabelle noch fehlt
     authMode: "login",      // 'login' | 'register'
     authDraft: { firstName: "", lastName: "", groupId: "", email: "", password: "" }, // Eingaben bleiben bei Fehlern erhalten
     authFocus: null,
     authError: null,
     authInfo: null,
     authBusy: false,
-    loadingData: false,
-    report: {
-      freqFrom: null, freqTo: null, freqRows: null, freqLoading: false,
-      logFrom: null, logTo: null, logRows: null, logLoading: false
-    }
+    loadingData: false
   };
+
+  state.repForm.anchor = fmtISO(new Date());
 
   function profileById(id) { for (var i = 0; i < state.profiles.length; i++) if (state.profiles[i].id === id) return state.profiles[i]; return null; }
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
@@ -450,14 +477,62 @@
   var DOW = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   var MONTHS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
+  // ---------- Feiertage Schleswig-Holstein (§ 2 Abs. 1 SFTG SH) ----------
+  // Feste und bewegliche Feiertage werden berechnet; einmalige Feiertage nach § 2 Abs. 2
+  // pflegen Admins in der Systemverwaltung (Tabelle holidays_extra). Gleiche Logik wie in der Datenbank.
+  function easterSunday(y) {
+    var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+    var f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+    var h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+    var l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    var mon = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(y, mon - 1, day);
+  }
+  var _holidayCache = {};
+  function shHolidaysOfYear(y) {
+    if (_holidayCache[y]) return _holidayCache[y];
+    var es = easterSunday(y), out = {};
+    function add(dt, name) { var k = fmtISO(dt); if (!out[k]) out[k] = name; } // bei Zusammenfall gilt der erste (wie in der Datenbank)
+    function rel(n) { var d = new Date(es); d.setDate(d.getDate() + n); return d; }
+    add(new Date(y, 0, 1), "Neujahr");
+    add(rel(-2), "Karfreitag");
+    add(rel(1), "Ostermontag");
+    add(new Date(y, 4, 1), "Tag der Arbeit");
+    add(rel(39), "Christi Himmelfahrt");
+    add(rel(50), "Pfingstmontag");
+    add(new Date(y, 9, 3), "Tag der Deutschen Einheit");
+    if (y >= 2018) add(new Date(y, 9, 31), "Reformationstag");
+    add(new Date(y, 11, 25), "1. Weihnachtstag");
+    add(new Date(y, 11, 26), "2. Weihnachtstag");
+    _holidayCache[y] = out;
+    return out;
+  }
+  // Name des Feiertags am Tag iso (YYYY-MM-DD) oder null
+  function holidayName(iso) {
+    var fixed = shHolidaysOfYear(parseInt(iso.slice(0, 4), 10))[iso];
+    if (fixed) return fixed;
+    var extra = (typeof state !== "undefined" && state.extraHolidays) ? state.extraHolidays.find(function (x) { return x.holiday_date === iso; }) : null;
+    return extra ? extra.name : null;
+  }
+  function isWeekendISO(iso) { var wd = parseISO(iso).getDay(); return wd === 0 || wd === 6; }
+  // Arbeitstag = Mo–Fr und kein Feiertag
+  function isWorkdayISO(iso) { return !isWeekendISO(iso) && !holidayName(iso); }
+
+
+  // Tagesleiste: die nächsten <count> Arbeitstage; dazwischen liegende Feiertage (Mo–Fr) werden
+  // ausgegraut mit angezeigt, zählen aber nicht mit.
   function buildWorkdays(count) {
-    var out = []; var d = new Date(); d.setHours(0, 0, 0, 0);
-    while (out.length < count) {
+    var out = [], n = 0; var d = new Date(); d.setHours(0, 0, 0, 0);
+    while (n < count) {
       var wd = d.getDay();
-      if (wd !== 0 && wd !== 6) out.push(new Date(d));
+      if (wd !== 0 && wd !== 6) { out.push(new Date(d)); if (!holidayName(fmtISO(d))) n++; }
       d.setDate(d.getDate() + 1);
     }
     return out;
+  }
+  function firstWorkdayISO(dates) {
+    var d = dates.find(function (x) { return !holidayName(fmtISO(x)); });
+    return fmtISO(d || dates[0]);
   }
 
   function escapeHtml(s) {
@@ -770,8 +845,7 @@
     var d = parseISO(startISO);
     var end = parseISO(endISO);
     while (d <= end) {
-      var wd = d.getDay();
-      if (wd !== 0 && wd !== 6) out.push(fmtISO(d));
+      if (isWorkdayISO(fmtISO(d))) out.push(fmtISO(d)); // Mo–Fr ohne Feiertage
       d.setDate(d.getDate() + 1);
     }
     return out;
@@ -779,7 +853,7 @@
 
   function addVacationRange(startISO, endISO) {
     var allDates = weekdaysBetween(startISO, endISO);
-    if (!allDates.length) { showToast("Der Zeitraum enthält keine Werktage."); return; }
+    if (!allDates.length) { showToast("Der Zeitraum enthält keine Arbeitstage."); return; }
     var existing = state.vacations.filter(function (v) { return v.user_id === state.profile.id; }).map(function (v) { return v.vacation_date; });
     var toInsert = allDates.filter(function (d) { return existing.indexOf(d) === -1; }).map(function (d) { return { user_id: state.profile.id, vacation_date: d }; });
     if (!toInsert.length) { showToast("Dieser Zeitraum ist bereits vollständig eingetragen."); return; }
@@ -919,48 +993,373 @@
     });
   }
 
-  // ---------- Auswertungen (nur Admin) ----------
+  // ---------- Versionsdokumentation (je Kalendertag eine Version mit allen Änderungen des Tages) ----------
+  // Pflege: Bei jeder Programmänderung den Eintrag des aktuellen Tages ergänzen bzw. – beim ersten
+  // Änderungstag – eine neue Version oben anfügen. Die Datei CHANGELOG.md im Repository spiegelt diese Liste.
+  var APP_VERSIONS = [
+    { v: "2.2", date: "2026-11-04", items: [
+      "Neuer Admin-Bereich „Auswertungen“: Zeitauslastung (gebuchte Stunden im Verhältnis zu 05–20 Uhr an allen Arbeitstagen) und Nutzungstage (Tage mit mindestens einer Buchung) je Arbeitsplatz – für Woche, Monat, Jahr oder einen frei wählbaren Zeitraum (mit Kalender), für alle oder einzelne Raumgruppen, als PDF-Ausdruck. Ohne personenbezogene Daten.",
+      "Gesetzliche Feiertage in Schleswig-Holstein (§ 2 Sonn- und Feiertagsgesetz) werden berücksichtigt: in der Tagesleiste ausgegraut und nicht buchbar, beim Eintragen von Urlaub übersprungen, in Auswertungen nicht als Arbeitstag gezählt. Einmalige Feiertage (§ 2 Abs. 2) können in der Systemverwaltung gepflegt werden.",
+      "Versionsdokumentation mit PDF-Ausdruck; aktuelle Version in der Fußzeile."
+    ] },
+    { v: "2.1", date: "2026-11-03", items: [
+      "Urlaub: aufklappbarer Monatskalender zur Auswahl von Start- und Enddatum.",
+      "Personen mit fest zugewiesenem Arbeitsplatz sehen keine Favoriten-Funktion mehr."
+    ] },
+    { v: "2.0", date: "2026-11-02", items: [
+      "Buchung nach frei wählbaren Zeitspannen (05:00–20:00 Uhr, 30-Minuten-Raster) statt Vormittag/Nachmittag/Ganztags; Zeitbalken je Arbeitsplatz; Schnellauswahl Vormittag, Nachmittag, Ganztags.",
+      "Schutz gegen Doppelbelegung eines Platzes und Doppelbuchung einer Person direkt in der Datenbank (auch bei gleichzeitigen Klicks).",
+      "Eigene Buchungen anpassen (Beginn/Ende); Höchstdauer 10,5 Stunden; Sicherheitsabfrage vor dem Stornieren; Endzeit bleibt beim Ändern der Startzeit erhalten.",
+      "Persönliche Lieblingszeit und Lieblingsplatz mit Schnellbuchung, einstellbar unter „Meine“.",
+      "Bisheriger Bereich „Auswertungen“ (Buchungshäufigkeit, Buchungsprotokoll) aus Datenschutzgründen und mit Blick auf den Personalrat deaktiviert.",
+      "Registrierung mit getrennten Feldern für Vor- und Nachname; Eingaben bleiben bei Fehlern erhalten; Passwortprüfung schon vor dem Absenden.",
+      "Fehlerbehebungen: Bestätigungslink führt zurück zur App; Löschen von Konten mit Buchungen funktioniert wieder."
+    ] },
+    { v: "1.4", date: "2026-11-01", items: [
+      "Initialen-Kreis (wie in Outlook) im Nutzerbereich der Kopfzeile."
+    ] },
+    { v: "1.3", date: "2026-10-31", items: [
+      "VAK-Logo und Farbschema nach www.vak-sh.de; Gestaltung angelehnt an das VAK-Toolportal.",
+      "Umschalter Hell/Dunkel; Anmeldeseite mit stilisiertem Büroraum (Tag-/Nacht-Szene).",
+      "Kopfzeile für Smartphones optimiert („VAK SH“ bei wenig Platz)."
+    ] },
+    { v: "1.2", date: "2026-09-29", items: [
+      "Tagesleiste springt nach Auswahl eines Tages nicht mehr an den Anfang zurück.",
+      "Korrekte Rückmeldung nach der E-Mail-Bestätigung bei erstmaliger Anmeldung; verständliche Hinweise zu den Passwortregeln."
+    ] },
+    { v: "1.1", date: "2026-09-26", items: [
+      "Raumgruppen: Nutzer:innen sehen nur die Räume ihrer Gruppe.",
+      "Systemverwaltung erweitert: Räume, Arbeitsplätze und Gruppenzuordnungen pflegen, Admin-Rechte vergeben, Konten deaktivieren und löschen.",
+      "Auswertungen (Buchungshäufigkeit je Raum, Buchungsprotokoll)."
+    ] },
+    { v: "1.0", date: "2026-09-25", items: [
+      "Erstversion: Anmeldung und Registrierung; Buchung von Büroarbeitsplätzen (Vormittag, Nachmittag, ganztags) für die nächsten zehn Arbeitstage; eigene Buchungen mit Storno; feste Arbeitsplätze mit Freigabe an Urlaubstagen; Team-Übersicht; Systemverwaltung; automatischer Dunkelmodus."
+    ] }
+  ];
+  var APP_VERSION = APP_VERSIONS[0];
+  function fmtDE(iso) { var p = iso.split("-"); return p[2] + "." + p[1] + "." + p[0]; }
 
-  function runFrequencyReport(fromISO, toISO) {
-    if (!fromISO || !toISO) { showToast("Bitte Zeitraum wählen."); return; }
-    if (toISO < fromISO) { showToast("Das Enddatum muss nach dem Startdatum liegen."); return; }
-    state.report.freqFrom = fromISO; state.report.freqTo = toISO;
-    state.report.freqLoading = true; state.report.freqRows = null; render();
-    supabaseClient.from("bookings").select("room_number, start_time, end_time")
-      .gte("booking_date", fromISO).lte("booking_date", toISO)
-      .then(function (res) {
-        state.report.freqLoading = false;
-        if (res.error) { showToast("Laden fehlgeschlagen: " + res.error.message); console.error(res.error); render(); return; }
-        var counts = {}, minutes = {};
-        (res.data || []).forEach(function (b) {
-          counts[b.room_number] = (counts[b.room_number] || 0) + 1;
-          minutes[b.room_number] = (minutes[b.room_number] || 0) + (bEnd(b) - bStart(b));
+  // ---------- Auswertungen (nur Admin, ohne Personenbezug) ----------
+  var SLOT_MIN_PER_DAY = DAY_END - DAY_START; // 900 Minuten = 15 Stunden je Arbeitstag
+
+  function isoWeek(d) {
+    var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    var day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day);
+    var y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return Math.ceil(((t - y0) / 86400000 + 1) / 7);
+  }
+  // Zeitraum aus Modus + Bezugsdatum
+  function reportPeriod() {
+    var rf = state.repForm, a = parseISO(rf.anchor);
+    if (rf.mode === "week") {
+      var mon = new Date(a); mon.setDate(a.getDate() - ((a.getDay() + 6) % 7));
+      var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      return { from: fmtISO(mon), to: fmtISO(sun), label: "KW " + isoWeek(mon) + " · " + fmtDE(fmtISO(mon)) + "–" + fmtDE(fmtISO(sun)) };
+    }
+    if (rf.mode === "month") {
+      var f = new Date(a.getFullYear(), a.getMonth(), 1), l = new Date(a.getFullYear(), a.getMonth() + 1, 0);
+      return { from: fmtISO(f), to: fmtISO(l), label: MONTH_NAMES[a.getMonth()] + " " + a.getFullYear() };
+    }
+    if (rf.mode === "year") {
+      return { from: a.getFullYear() + "-01-01", to: a.getFullYear() + "-12-31", label: "Jahr " + a.getFullYear() };
+    }
+    if (!rf.start || !rf.end) return null;
+    return { from: rf.start, to: rf.end, label: fmtDE(rf.start) + "–" + fmtDE(rf.end) };
+  }
+  function shiftReportAnchor(dir) {
+    var rf = state.repForm, a = parseISO(rf.anchor);
+    if (rf.mode === "week") a.setDate(a.getDate() + 7 * dir);
+    else if (rf.mode === "month") a = new Date(a.getFullYear(), a.getMonth() + dir, 1);
+    else if (rf.mode === "year") a = new Date(a.getFullYear() + dir, 0, 1);
+    rf.anchor = fmtISO(a); rf.result = null;
+  }
+  function workdaysInRange(fromISO, toISO) {
+    var out = [], d = parseISO(fromISO), end = parseISO(toISO);
+    while (d <= end) { var iso = fmtISO(d); if (isWorkdayISO(iso)) out.push(iso); d.setDate(d.getDate() + 1); }
+    return out;
+  }
+  function holidaysInRange(fromISO, toISO) {
+    var out = [], d = parseISO(fromISO), end = parseISO(toISO);
+    while (d <= end) { var iso = fmtISO(d), n = holidayName(iso); if (n && !isWeekendISO(iso)) out.push({ iso: iso, name: n }); d.setDate(d.getDate() + 1); }
+    return out;
+  }
+  // Buchungen eines Zeitraums vollständig laden (Supabase liefert max. 1000 Zeilen je Abfrage)
+  function fetchBookingsRange(fromISO, toISO) {
+    var all = [], page = 1000;
+    function next(offset) {
+      return supabaseClient.from("bookings").select("id, workspace_id, booking_date, start_time, end_time")
+        .gte("booking_date", fromISO).lte("booking_date", toISO).order("id").range(offset, offset + page - 1)
+        .then(function (res) {
+          if (res.error) throw res.error;
+          var rows = res.data || [];
+          all = all.concat(rows);
+          return rows.length === page ? next(offset + page) : all;
         });
-        state.report.freqRows = Object.keys(counts).map(function (num) {
-          var room = findRoomByNumber(num);
-          return { label: room ? room.label : num, count: counts[num], minutes: minutes[num] };
-        }).sort(function (a, b) { return b.minutes - a.minutes || b.count - a.count; });
-        render();
+    }
+    return next(0);
+  }
+  function computeUtilization(per, bookings, groupFilter) {
+    var workdays = workdaysInRange(per.from, per.to);
+    var wdSet = {}; workdays.forEach(function (d) { wdSet[d] = true; });
+    var maxMin = workdays.length * SLOT_MIN_PER_DAY;
+    var byWs = {};
+    bookings.forEach(function (b) {
+      if (!wdSet[b.booking_date]) return;
+      var s = Math.max(bStart(b), DAY_START), e = Math.min(bEnd(b), DAY_END);
+      if (e <= s) return;
+      var w = byWs[b.workspace_id] || (byWs[b.workspace_id] = { minutes: 0, days: {} });
+      w.minutes += e - s; w.days[b.booking_date] = true;
+    });
+    var groups = state.groups.filter(function (g) { return groupFilter === "all" || g.id === groupFilter; }).map(function (g) {
+      var gMin = 0, gDays = 0, gCount = 0;
+      var rooms = roomsForGroup(g.id).map(function (room) {
+        var rMin = 0, rDays = 0, rCount = 0;
+        var wss = room.workspaces.map(function (ws) {
+          var u = byWs[ws.id] || { minutes: 0, days: {} };
+          var days = Object.keys(u.days).length;
+          var perm = !!state.permanentAssignments[ws.id];
+          if (!perm) { rMin += u.minutes; rDays += days; rCount++; }
+          return { label: ws.label, minutes: u.minutes, days: days, perm: perm };
+        });
+        gMin += rMin; gDays += rDays; gCount += rCount;
+        return { label: room.label, workspaces: wss, minutes: rMin, days: rDays, count: rCount };
       });
+      return { name: g.name, rooms: rooms, minutes: gMin, days: gDays, count: gCount };
+    });
+    var tMin = 0, tDays = 0, tCount = 0;
+    groups.forEach(function (g) { tMin += g.minutes; tDays += g.days; tCount += g.count; });
+    return {
+      period: per, workdays: workdays.length, maxMin: maxMin, holidays: holidaysInRange(per.from, per.to),
+      groupLabel: groupFilter === "all" ? "Alle Raumgruppen" : ((groupById(groupFilter) || {}).name || ""),
+      groups: groups, total: { minutes: tMin, days: tDays, count: tCount }, createdAt: new Date()
+    };
+  }
+  function runUtilizationReport() {
+    var per = reportPeriod();
+    if (!per) { showToast("Bitte Von- und Bis-Datum wählen."); return; }
+    if (per.to < per.from) { showToast("Das Enddatum muss nach dem Startdatum liegen."); return; }
+    var rf = state.repForm; rf.loading = true; rf.result = null; render();
+    fetchBookingsRange(per.from, per.to).then(function (rows) {
+      rf.loading = false; rf.result = computeUtilization(per, rows, rf.group); render();
+    }).catch(function (e) { rf.loading = false; showToast("Auswertung fehlgeschlagen: " + (e.message || e)); console.error(e); render(); });
+  }
+  function pctOf(part, whole) { return whole > 0 ? part / whole * 100 : 0; }
+  function fmtPct(v) { return (Math.round(v * 10) / 10).toString().replace(".", ",") + " %"; }
+  function fmtHours(min) { return (Math.round(min / 6) / 10).toString().replace(".", ",") + " Std."; }
+
+  function utilBar(p) {
+    return '<span class="ubar"><i style="width:' + Math.min(100, p).toFixed(1) + '%"></i></span>';
   }
 
-  function runBookingLog(fromISO, toISO) {
-    if (!fromISO || !toISO) { showToast("Bitte Zeitraum wählen."); return; }
-    if (toISO < fromISO) { showToast("Das Enddatum muss nach dem Startdatum liegen."); return; }
-    state.report.logFrom = fromISO; state.report.logTo = toISO;
-    state.report.logLoading = true; state.report.logRows = null; render();
-    supabaseClient.from("booking_log").select("id, action, event_at, user_id, acted_by, room_number, workspace_id, booking_date, part, start_time, end_time, prev_start_time, prev_end_time")
-      .gte("event_at", fromISO + "T00:00:00").lte("event_at", toISO + "T23:59:59")
-      .order("event_at", { ascending: false })
-      .then(function (res) {
-        state.report.logLoading = false;
-        if (res.error) { showToast("Laden fehlgeschlagen: " + res.error.message); console.error(res.error); render(); return; }
-        state.report.logRows = res.data || [];
-        render();
+  function renderAuswertung() {
+    if (!state.profile || !state.profile.is_admin) {
+      return '<div class="card"><h3>Auswertungen</h3><div class="empty-state">Dieser Bereich ist nur für Administrator:innen sichtbar.</div></div>';
+    }
+    var rf = state.repForm;
+    var html = '<div class="card"><h3>Auslastung der Arbeitsplätze</h3>';
+    html += '<div class="modal-sub">Zeitauslastung: gebuchte Stunden im Verhältnis zum Maximum (05–20 Uhr an jedem Arbeitstag). Nutzungstage: Arbeitstage mit mindestens einer Buchung. Wochenenden und Feiertage in Schleswig-Holstein zählen nicht als Arbeitstag. Die Auswertung enthält keine personenbezogenen Daten.</div>';
+    html += '<label>Zeitraum</label><div class="preset-row rep-modes">';
+    [["week", "Woche"], ["month", "Monat"], ["year", "Jahr"], ["custom", "Frei"]].forEach(function (m) {
+      html += '<button type="button" class="preset-chip' + (rf.mode === m[0] ? ' active' : '') + '" data-repmode="' + m[0] + '">' + m[1] + '</button>';
+    });
+    html += '</div>';
+    if (rf.mode !== "custom") {
+      var per = reportPeriod();
+      html += '<div class="rep-nav"><button type="button" class="vcal-nav" data-repshift="-1" aria-label="zurück">‹</button><b>' + escapeHtml(per.label) + '</b><button type="button" class="vcal-nav" data-repshift="1" aria-label="vor">›</button></div>';
+    } else {
+      html += '<label for="repStart">Von</label><div class="date-pick"><input type="date" id="repStart" value="' + escapeHtml(rf.start) + '"><button type="button" class="cal-btn' + (rf.open === "start" ? ' open' : '') + '" data-vcal-open="start" data-vcal-form="rep" aria-label="Kalender für Startdatum">📅</button></div>';
+      if (rf.open === "start") html += calendarHtml("rep", "start");
+      html += '<label for="repEnd">Bis</label><div class="date-pick"><input type="date" id="repEnd" min="' + escapeHtml(rf.start) + '" value="' + escapeHtml(rf.end) + '"><button type="button" class="cal-btn' + (rf.open === "end" ? ' open' : '') + '" data-vcal-open="end" data-vcal-form="rep" aria-label="Kalender für Enddatum">📅</button></div>';
+      if (rf.open === "end") html += calendarHtml("rep", "end");
+    }
+    html += '<label for="repGroup">Raumgruppe</label><select id="repGroup"><option value="all"' + (rf.group === "all" ? ' selected' : '') + '>Alle Raumgruppen</option>';
+    state.groups.forEach(function (g) { html += '<option value="' + g.id + '"' + (rf.group === g.id ? ' selected' : '') + '>' + escapeHtml(g.name) + '</option>'; });
+    html += '</select>';
+    html += '<div style="height:12px"></div><button class="btn-primary" id="runUtilBtn"' + (rf.loading ? ' disabled' : '') + '>' + (rf.loading ? 'Wird berechnet…' : 'Auswertung erstellen') + '</button>';
+    html += '</div>';
+
+    var r = rf.result;
+    if (r) {
+      html += '<div class="card"><div class="rep-head"><div><h3 style="margin:0">' + escapeHtml(r.period.label) + '</h3><div class="booking-sub">' + escapeHtml(r.groupLabel) + ' · ' + r.workdays + ' Arbeitstage · max. ' + fmtHours(r.maxMin) + ' je Platz</div></div>';
+      html += '<button class="btn-edit" id="utilPdfBtn">PDF</button></div>';
+      if (r.holidays.length) html += '<div class="booking-sub" style="margin-top:6px">Feiertage im Zeitraum: ' + r.holidays.map(function (h) { return escapeHtml(fmtDE(h.iso) + " " + h.name); }).join(", ") + '</div>';
+      if (!r.workdays) html += '<div class="empty-state">Im gewählten Zeitraum liegt kein Arbeitstag.</div>';
+      var maxAll = r.total.count * r.maxMin, maxDaysAll = r.total.count * r.workdays;
+      html += '<div class="rep-total"><div><span>Zeitauslastung gesamt</span><b>' + fmtPct(pctOf(r.total.minutes, maxAll)) + '</b>' + utilBar(pctOf(r.total.minutes, maxAll)) + '</div><div><span>Nutzungstage gesamt</span><b>' + fmtPct(pctOf(r.total.days, maxDaysAll)) + '</b>' + utilBar(pctOf(r.total.days, maxDaysAll)) + '</div></div>';
+      html += '</div>';
+      r.groups.forEach(function (g) {
+        html += '<div class="group-heading">' + escapeHtml(g.name) + '</div>';
+        if (!g.rooms.length) { html += '<div class="card"><div class="empty-state">Keine Räume in dieser Gruppe.</div></div>'; return; }
+        g.rooms.forEach(function (room) {
+          html += '<div class="card"><h3>' + escapeHtml(room.label) + '</h3>';
+          room.workspaces.forEach(function (w) {
+            var pt = pctOf(w.minutes, r.maxMin), pd = pctOf(w.days, r.workdays);
+            html += '<div class="rep-row"><div class="rep-ws">' + escapeHtml(w.label) + (w.perm ? ' <span class="rep-tag">fest vergeben</span>' : '') + '</div>';
+            html += '<div class="rep-metric"><span>Zeit</span>' + utilBar(pt) + '<b>' + fmtPct(pt) + '</b><small>' + fmtHours(w.minutes) + ' von ' + fmtHours(r.maxMin) + '</small></div>';
+            html += '<div class="rep-metric"><span>Tage</span>' + utilBar(pd) + '<b>' + fmtPct(pd) + '</b><small>' + w.days + ' von ' + r.workdays + ' Tagen</small></div></div>';
+          });
+          html += '</div>';
+        });
       });
+      if (r.groups.some(function (g) { return g.rooms.some(function (rm) { return rm.workspaces.some(function (w) { return w.perm; }); }); })) {
+        html += '<div class="booking-sub" style="margin:-4px 2px 14px">„fest vergeben“: Platz ist einer Person dauerhaft zugewiesen; seine Nutzung wird nicht über Buchungen erfasst. Diese Plätze fließen nicht in die Gesamtwerte ein.</div>';
+      }
+    }
+
+    // Versionsdokumentation
+    html += '<div class="card"><div class="rep-head"><h3 style="margin:0">Versionsdokumentation</h3><button class="btn-edit" id="versPdfBtn">PDF</button></div>';
+    html += '<div class="booking-sub" style="margin:4px 0 8px">Je Kalendertag eine Version mit allen Änderungen dieses Tages.</div>';
+    APP_VERSIONS.forEach(function (ver, i) {
+      html += '<details class="vers"' + (i === 0 ? ' open' : '') + '><summary><b>Version ' + ver.v + '</b> · ' + fmtDE(ver.date) + '</summary><ul>';
+      ver.items.forEach(function (it) { html += '<li>' + escapeHtml(it) + '</li>'; });
+      html += '</ul></details>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // ---------- PDF-Erzeugung (Bibliotheken werden erst bei Bedarf geladen) ----------
+  var PDF_LIBS = [
+    "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",
+    "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"
+  ];
+  var _pdfLibsPromise = null;
+  function loadPdfLibs() {
+    if (_pdfLibsPromise) return _pdfLibsPromise;
+    _pdfLibsPromise = PDF_LIBS.reduce(function (p, url) {
+      return p.then(function () {
+        return new Promise(function (resolve, reject) {
+          var s = document.createElement("script"); s.src = url; s.onload = resolve;
+          s.onerror = function () { reject(new Error("PDF-Bibliothek konnte nicht geladen werden")); };
+          document.head.appendChild(s);
+        });
+      });
+    }, Promise.resolve()).catch(function (e) { _pdfLibsPromise = null; throw e; });
+    return _pdfLibsPromise;
+  }
+  var PDF_BLUE = [0, 82, 140], PDF_RED = [183, 12, 35], PDF_GREY = [92, 107, 122];
+  function pdfStamp(d) { return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear() + ", " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + " Uhr"; }
+  function newPdfDoc(title, subtitle) {
+    var doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+    try { doc.addImage(VAK_LOGO_SRC, "PNG", 15, 12, 30, 11); } catch (e) {}
+    doc.setFillColor.apply(doc, PDF_RED); doc.rect(49, 12, 1.2, 11, "F");
+    doc.setTextColor.apply(doc, PDF_BLUE); doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.text(title, 54, 17);
+    doc.setTextColor.apply(doc, PDF_GREY); doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.text(subtitle, 54, 22.5);
+    doc.setDrawColor(225, 230, 234); doc.line(15, 28, 195, 28);
+    return doc;
+  }
+  function pdfFooter(doc) {
+    var n = doc.getNumberOfPages();
+    for (var i = 1; i <= n; i++) {
+      doc.setPage(i); doc.setFontSize(8); doc.setTextColor.apply(doc, PDF_GREY);
+      doc.text("VAK Schleswig-Holstein · Büro-Buchung · Version " + APP_VERSION.v + " vom " + fmtDE(APP_VERSION.date), 15, 289);
+      doc.text("Seite " + i + " von " + n, 195, 289, { align: "right" });
+    }
+  }
+  function withPdf(build, filename) {
+    showToast("PDF wird erstellt…");
+    loadPdfLibs().then(function () { var doc = build(); pdfFooter(doc); doc.save(filename); })
+      .catch(function (e) { showToast(e.message || "PDF konnte nicht erstellt werden."); console.error(e); });
+  }
+
+  function exportUtilizationPdf() {
+    var r = state.repForm.result; if (!r) return;
+    withPdf(function () {
+      var doc = newPdfDoc("Auslastung der Büroarbeitsplätze", r.period.label + " · " + r.groupLabel);
+      doc.setFontSize(9); doc.setTextColor(28, 39, 51);
+      var y = 34;
+      var info = [
+        "Zeitraum: " + fmtDE(r.period.from) + " bis " + fmtDE(r.period.to) + " · Arbeitstage: " + r.workdays + " · Maximum je Platz: " + fmtHours(r.maxMin) + " (05–20 Uhr je Arbeitstag)",
+        "Feiertage im Zeitraum: " + (r.holidays.length ? r.holidays.map(function (h) { return fmtDE(h.iso) + " " + h.name; }).join(", ") : "keine"),
+        "Erstellt am " + pdfStamp(r.createdAt) + ". Die Auswertung enthält keine personenbezogenen Daten."
+      ];
+      info.forEach(function (line) { var parts = doc.splitTextToSize(line, 180); doc.text(parts, 15, y); y += parts.length * 4.3; });
+      var maxAll = r.total.count * r.maxMin, maxDaysAll = r.total.count * r.workdays;
+      y += 1;
+      doc.setFont("helvetica", "bold"); doc.setTextColor.apply(doc, PDF_BLUE);
+      doc.text("Gesamt: Zeitauslastung " + fmtPct(pctOf(r.total.minutes, maxAll)) + " · Nutzungstage " + fmtPct(pctOf(r.total.days, maxDaysAll)), 15, y + 2);
+      doc.setFont("helvetica", "normal"); y += 6;
+      var hasPerm = false;
+      r.groups.forEach(function (g) {
+        var body = [];
+        g.rooms.forEach(function (room) {
+          room.workspaces.forEach(function (w) {
+            if (w.perm) hasPerm = true;
+            body.push([room.label, w.label + (w.perm ? " (fest vergeben)" : ""), fmtHours(w.minutes), fmtPct(pctOf(w.minutes, r.maxMin)), w.days + " / " + r.workdays, fmtPct(pctOf(w.days, r.workdays))]);
+          });
+        });
+        var gMax = g.count * r.maxMin, gMaxD = g.count * r.workdays;
+        doc.autoTable({
+          startY: y, margin: { left: 15, right: 15 },
+          head: [[{ content: g.name, colSpan: 6, styles: { fillColor: PDF_BLUE, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 9.5 } }],
+                 ["Raum", "Arbeitsplatz", "Gebuchte Std.", "Zeitauslastung", "Nutzungstage", "Anteil Tage"]],
+          body: body.length ? body : [[{ content: "Keine Räume in dieser Gruppe.", colSpan: 6 }]],
+          foot: body.length ? [["Summe Gruppe", "", fmtHours(g.minutes), fmtPct(pctOf(g.minutes, gMax)), g.days + " / " + gMaxD, fmtPct(pctOf(g.days, gMaxD))].map(function (c, i) { return { content: c, styles: { halign: i >= 2 ? "right" : "left" } }; })] : undefined,
+          styles: { font: "helvetica", fontSize: 8.5, cellPadding: 1.6 },
+          headStyles: { fillColor: [234, 241, 248], textColor: [0, 63, 105] },
+          footStyles: { fillColor: [242, 246, 249], textColor: [28, 39, 51], fontStyle: "bold" },
+          columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 50 }, 2: { cellWidth: 25, halign: "right" }, 3: { cellWidth: 25, halign: "right" }, 4: { cellWidth: 25, halign: "right" }, 5: { cellWidth: 25, halign: "right" } },
+          theme: "grid"
+        });
+        y = doc.lastAutoTable.finalY + 6;
+      });
+      if (hasPerm) {
+        doc.setFontSize(8); doc.setTextColor.apply(doc, PDF_GREY);
+        if (y > 275) { doc.addPage(); y = 20; }
+        doc.text(doc.splitTextToSize("„fest vergeben“: Platz ist einer Person dauerhaft zugewiesen; seine Nutzung wird nicht über Buchungen erfasst. Diese Plätze fließen nicht in die Gruppen- und Gesamtwerte ein.", 180), 15, y);
+      }
+      return doc;
+    }, "Auslastung_" + r.period.from + "_bis_" + r.period.to + ".pdf");
+  }
+
+  function exportVersionsPdf() {
+    withPdf(function () {
+      var doc = newPdfDoc("Versionsdokumentation", "Büro-Buchung · Stand " + fmtDE(APP_VERSION.date) + " (Version " + APP_VERSION.v + ")");
+      doc.setFontSize(8.5); doc.setTextColor.apply(doc, PDF_GREY);
+      doc.text("Je Kalendertag wird eine Version mit allen Änderungen dieses Tages dokumentiert.", 15, 34);
+      var body = [];
+      APP_VERSIONS.forEach(function (ver) {
+        body.push([{ content: ver.v, styles: { fontStyle: "bold" } }, fmtDE(ver.date), ver.items.map(function (x) { return "– " + x; }).join("\n")]);
+      });
+      doc.autoTable({
+        startY: 38, margin: { left: 15, right: 15 },
+        head: [["Version", "Datum", "Änderungen"]], body: body,
+        styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2, valign: "top" },
+        headStyles: { fillColor: PDF_BLUE },
+        columnStyles: { 0: { cellWidth: 16 }, 1: { cellWidth: 22 } },
+        theme: "grid"
+      });
+      return doc;
+    }, "Versionsdokumentation_Buero-Buchung_" + APP_VERSION.v + ".pdf");
   }
 
   // ---------- data loading ----------
+
+  function loadExtraHolidays() {
+    return supabaseClient.from("holidays_extra").select("holiday_date, name").order("holiday_date").then(function (res) {
+      if (res.error) { state.extraHolidaysOk = false; state.extraHolidays = []; return; }
+      state.extraHolidaysOk = true;
+      state.extraHolidays = res.data || [];
+      // Tagesleiste neu aufbauen, falls ein Zusatzfeiertag hineinfällt
+      state.dates = buildWorkdays(WORKDAY_COUNT);
+      if (holidayName(state.selectedDate) || !state.dates.some(function (d) { return fmtISO(d) === state.selectedDate; })) state.selectedDate = firstWorkdayISO(state.dates);
+      render();
+    });
+  }
+  function addExtraHoliday(iso, name) {
+    if (!iso || !name) { showToast("Bitte Datum und Bezeichnung angeben."); return; }
+    if (holidayName(iso)) { showToast("An diesem Tag ist bereits ein Feiertag."); return; }
+    supabaseClient.from("holidays_extra").insert({ holiday_date: iso, name: name }).then(function (res) {
+      if (res.error) { showToast("Speichern fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      showToast("Feiertag eingetragen: " + fmtDE(iso) + " " + name); loadExtraHolidays();
+    });
+  }
+  function removeExtraHoliday(iso) {
+    supabaseClient.from("holidays_extra").delete().eq("holiday_date", iso).then(function (res) {
+      if (res.error) { showToast("Entfernen fehlgeschlagen: " + res.error.message); console.error(res.error); return; }
+      showToast("Feiertag entfernt."); loadExtraHolidays();
+    });
+  }
 
   function loadProfiles() {
     return supabaseClient.from("profiles").select("id, full_name, is_admin, group_id, is_active, favorite_start, favorite_end, favorite_workspace_id").then(function (res) {
@@ -1007,7 +1406,7 @@
   function loadAllData(afterAuth) {
     state.loadingData = true;
     render();
-    Promise.all([loadProfiles(), loadBookings(), loadVacations(), loadPermanentAssignments(), loadGroups(), loadRooms(), loadWorkspaces()]).then(function () {
+    Promise.all([loadProfiles(), loadBookings(), loadVacations(), loadPermanentAssignments(), loadGroups(), loadRooms(), loadWorkspaces(), loadExtraHolidays()]).then(function () {
       state.profile = profileById(state.session.user.id);
       if (!state.profile) {
         // profile row may not exist yet (trigger race right after signup) — retry once shortly
@@ -1220,9 +1619,9 @@
     else if (state.tab === "urlaub") html += renderUrlaub();
     else if (state.tab === "uebersicht") html += renderUebersicht();
     else if (state.tab === "admin") html += renderAdmin();
-    else if (state.tab === "auswertung" && REPORTS_ENABLED) html += renderAuswertung();
+    else if (state.tab === "auswertung") html += renderAuswertung();
     html += '</main>';
-    html += '<footer class="app-footer"><a id="adminLink">Systemverwaltung</a>' + (REPORTS_ENABLED ? ' · <a id="reportsLink">Auswertungen</a>' : '') + '</footer>';
+    html += '<footer class="app-footer"><a id="adminLink">Systemverwaltung</a>' + (user && user.is_admin ? ' · <a id="reportsLink">Auswertungen</a>' : '') + '<div class="app-version">Version ' + APP_VERSION.v + ' vom ' + fmtDE(APP_VERSION.date) + '</div></footer>';
     if (state.modal) html += renderModal();
     if (state.toastMsg) html += '<div class="toast">' + escapeHtml(state.toastMsg) + '</div>';
     return html;
@@ -1231,9 +1630,9 @@
   function renderDateScroll() {
     var html = '<div class="date-scroll">';
     state.dates.forEach(function (d) {
-      var iso = fmtISO(d); var active = iso === state.selectedDate;
-      html += '<div class="date-chip ' + (active ? "active" : "") + '" data-date="' + iso + '">';
-      html += '<span class="dow">' + DOW[d.getDay()] + '</span><span class="dom">' + d.getDate() + '.' + MONTHS[d.getMonth()] + '</span></div>';
+      var iso = fmtISO(d); var active = iso === state.selectedDate; var hol = holidayName(iso);
+      html += '<div class="date-chip ' + (active ? "active" : "") + (hol ? " holiday" : "") + '" data-date="' + iso + '"' + (hol ? ' title="' + escapeHtml(hol) + ' – Feiertag, nicht buchbar" aria-disabled="true"' : '') + '>';
+      html += '<span class="dow">' + DOW[d.getDay()] + '</span><span class="dom">' + d.getDate() + '.' + MONTHS[d.getMonth()] + '</span>' + (hol ? '<span class="hol">Feiertag</span>' : '') + '</div>';
     });
     html += '</div>';
     return html;
@@ -1296,6 +1695,8 @@
     var myGroup = groupById(state.profile.group_id);
     var html = '<div class="group-heading">' + escapeHtml(myGroup ? myGroup.name : '') + '</div>';
     html += renderDateScroll();
+    var holB = holidayName(dateISO);
+    if (holB) return html + '<div class="card"><div class="empty-state">' + escapeHtml(holB) + ' – an Feiertagen sind keine Buchungen möglich.</div></div>';
     var myPermWorkspaceIds = Object.keys(state.permanentAssignments).filter(function (wsId) { return state.permanentAssignments[wsId] === state.profile.id; });
     var hasOwnPermanentDesk = myPermWorkspaceIds.length > 0;
     var iAmOnVacationToday = state.vacations.some(function (v) { return v.user_id === state.profile.id && v.vacation_date === dateISO; });
@@ -1410,15 +1811,16 @@
 
   var MONTH_NAMES = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
   // Aufklappbarer Monatskalender für Von/Bis beim Urlaub (Tag antippen = übernehmen)
-  function vacCalendarHtml(which) {
-    var vf = state.vacForm;
+  function calForm(key) { return key === "rep" ? state.repForm : state.vacForm; }
+  function calendarHtml(formKey, which) {
+    var vf = calForm(formKey);
     var ym = vf.calMonth.split("-"); var y = parseInt(ym[0], 10), mo = parseInt(ym[1], 10) - 1;
     var first = new Date(y, mo, 1), days = new Date(y, mo + 1, 0).getDate();
     var lead = (first.getDay() + 6) % 7; // Montag zuerst
     var today = fmtISO(new Date());
     var myVac = {};
-    state.vacations.forEach(function (v) { if (v.user_id === state.profile.id) myVac[v.vacation_date] = true; });
-    var html = '<div class="vcal" data-vcal="' + which + '">';
+    if (formKey === "vac") state.vacations.forEach(function (v) { if (v.user_id === state.profile.id) myVac[v.vacation_date] = true; });
+    var html = '<div class="vcal" data-vcal="' + which + '" data-vcal-form="' + formKey + '">';
     html += '<div class="vcal-head"><button type="button" class="vcal-nav" data-vcal-nav="-1" aria-label="Vormonat">‹</button><b>' + MONTH_NAMES[mo] + ' ' + y + '</b><button type="button" class="vcal-nav" data-vcal-nav="1" aria-label="Folgemonat">›</button></div>';
     html += '<div class="vcal-grid">';
     ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].forEach(function (d) { html += '<span class="vcal-dow">' + d + '</span>'; });
@@ -1426,16 +1828,18 @@
     for (var d = 1; d <= days; d++) {
       var iso = y + "-" + pad(mo + 1) + "-" + pad(d);
       var wd = new Date(y, mo, d).getDay();
+      var hol = holidayName(iso);
       var cls = "vcal-day";
       if (wd === 0 || wd === 6) cls += " we";
+      if (hol) cls += " hol";
       if (iso === vf.start || iso === vf.end) cls += " sel";
       else if (vf.start && vf.end && iso > vf.start && iso < vf.end) cls += " inrange";
       if (myVac[iso]) cls += " vac";
       if (iso === today) cls += " today";
-      var disabled = iso < today || (which === "end" && vf.start && iso < vf.start);
-      html += '<button type="button" class="' + cls + '" data-vcal-day="' + iso + '"' + (disabled ? ' disabled' : '') + '>' + d + '</button>';
+      var disabled = (formKey === "vac" && iso < today) || (which === "end" && vf.start && iso < vf.start);
+      html += '<button type="button" class="' + cls + '" data-vcal-day="' + iso + '"' + (disabled ? ' disabled' : '') + (hol ? ' title="' + escapeHtml(hol) + '"' : '') + '>' + d + '</button>';
     }
-    html += '</div><div class="vcal-foot"><span><i class="lg vac"></i>bereits Urlaub</span><span><i class="lg we"></i>Wochenende</span></div></div>';
+    html += '</div><div class="vcal-foot">' + (formKey === "vac" ? '<span><i class="lg vac"></i>bereits Urlaub</span>' : '') + '<span><i class="lg hol"></i>Feiertag</span><span><i class="lg we"></i>Wochenende</span></div></div>';
     return html;
   }
 
@@ -1457,11 +1861,11 @@
     var html = '<div class="card"><h3>Urlaub eintragen</h3>';
     html += '<div class="banner">Dir ist ' + escapeHtml(myLabels) + ' dauerhaft zugewiesen. An deinen Urlaubstagen wird der Platz automatisch für andere buchbar.</div>';
     var vf = state.vacForm;
-    html += '<label for="vacStart">Von</label><div class="date-pick"><input type="date" id="vacStart" min="' + fmtISO(new Date()) + '" value="' + escapeHtml(vf.start) + '"><button type="button" class="cal-btn' + (vf.open === "start" ? ' open' : '') + '" data-vcal-open="start" aria-label="Kalender für Startdatum">📅</button></div>';
-    if (vf.open === "start") html += vacCalendarHtml("start");
-    html += '<label for="vacEnd">Bis</label><div class="date-pick"><input type="date" id="vacEnd" min="' + escapeHtml(vf.start || fmtISO(new Date())) + '" value="' + escapeHtml(vf.end) + '"><button type="button" class="cal-btn' + (vf.open === "end" ? ' open' : '') + '" data-vcal-open="end" aria-label="Kalender für Enddatum">📅</button></div>';
-    if (vf.open === "end") html += vacCalendarHtml("end");
-    html += '<div class="booking-sub" style="margin-top:8px">Es werden nur Werktage (Mo–Fr) im gewählten Zeitraum eingetragen, Wochenenden automatisch übersprungen.</div>';
+    html += '<label for="vacStart">Von</label><div class="date-pick"><input type="date" id="vacStart" min="' + fmtISO(new Date()) + '" value="' + escapeHtml(vf.start) + '"><button type="button" class="cal-btn' + (vf.open === "start" ? ' open' : '') + '" data-vcal-open="start" data-vcal-form="vac" aria-label="Kalender für Startdatum">📅</button></div>';
+    if (vf.open === "start") html += calendarHtml("vac", "start");
+    html += '<label for="vacEnd">Bis</label><div class="date-pick"><input type="date" id="vacEnd" min="' + escapeHtml(vf.start || fmtISO(new Date())) + '" value="' + escapeHtml(vf.end) + '"><button type="button" class="cal-btn' + (vf.open === "end" ? ' open' : '') + '" data-vcal-open="end" data-vcal-form="vac" aria-label="Kalender für Enddatum">📅</button></div>';
+    if (vf.open === "end") html += calendarHtml("vac", "end");
+    html += '<div class="booking-sub" style="margin-top:8px">Es werden nur Arbeitstage im gewählten Zeitraum eingetragen – Wochenenden und Feiertage werden automatisch übersprungen.</div>';
     html += '<div style="height:10px"></div><button class="btn-primary" id="addVacBtn">Urlaubszeitraum eintragen</button></div>';
     html += '<div class="card"><h3>Meine Urlaubstage</h3>';
     if (!mine.length) { html += '<div class="empty-state">Keine Einträge vorhanden.</div>'; }
@@ -1586,6 +1990,31 @@
     });
     html += '<div style="height:10px"></div><button class="btn-primary" id="savePermBtn">Speichern</button></div>';
 
+    // --- Feiertage ---
+    var todayIso = fmtISO(new Date()), yNow = new Date().getFullYear();
+    var upcoming = [];
+    [yNow, yNow + 1].forEach(function (y) {
+      var m = shHolidaysOfYear(y);
+      Object.keys(m).sort().forEach(function (iso) { if (iso >= todayIso && upcoming.length < 12) upcoming.push({ iso: iso, name: m[iso] }); });
+    });
+    html += '<div class="card"><h3>Feiertage</h3>';
+    html += '<div class="modal-sub">Die gesetzlichen Feiertage in Schleswig-Holstein (§ 2 Abs. 1 Sonn- und Feiertagsgesetz) werden automatisch berechnet und sind nicht buchbar. Einmalige zusätzliche Feiertage (§ 2 Abs. 2, z. B. per Landesverordnung) bitte hier eintragen.</div>';
+    html += '<div class="booking-sub" style="margin-bottom:6px"><b>Nächste gesetzliche Feiertage:</b></div>';
+    upcoming.forEach(function (x) { var d = parseISO(x.iso); html += '<div class="admin-row"><span>' + DOW[d.getDay()] + ', ' + fmtDE(x.iso) + '</span><span>' + escapeHtml(x.name) + '</span></div>'; });
+    html += '<div class="booking-sub" style="margin:14px 0 6px"><b>Zusätzliche Feiertage:</b></div>';
+    if (!state.extraHolidaysOk) {
+      html += '<div class="banner">Die Datenbank-Ergänzung für zusätzliche Feiertage ist noch nicht eingespielt. Die gesetzlichen Feiertage gelten bereits.</div>';
+    } else {
+      if (!state.extraHolidays.length) html += '<div class="empty-state" style="padding:8px">Keine eingetragen.</div>';
+      state.extraHolidays.forEach(function (x) {
+        html += '<div class="admin-row"><span>' + fmtDE(x.holiday_date) + ' · ' + escapeHtml(x.name) + '</span><button class="btn-danger" data-rmhol="' + x.holiday_date + '">Entfernen</button></div>';
+      });
+      html += '<label for="newHolDate">Datum</label><input type="date" id="newHolDate">';
+      html += '<label for="newHolName">Bezeichnung</label><input type="text" id="newHolName" placeholder="z. B. Landesweiter Gedenktag">';
+      html += '<div style="height:10px"></div><button class="btn-primary" id="addHolBtn">Feiertag eintragen</button>';
+    }
+    html += '</div>';
+
     return html;
   }
 
@@ -1599,8 +2028,11 @@
       var dayBookings = state.bookings.filter(function (b) { return b.booking_date === iso; })
         .sort(function (a, b) { return a.room_number.localeCompare(b.room_number) || a.workspace_id.localeCompare(b.workspace_id) || byStart(a, b); });
       var dayVacations = state.vacations.filter(function (v) { return v.vacation_date === iso; });
-      html += '<div class="card"><h3>' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + '</h3>';
-      if (!dayBookings.length && !dayVacations.length) {
+      var holU = holidayName(iso);
+      html += '<div class="card"><h3>' + DOW[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()] + (holU ? ' <span class="rep-tag">Feiertag: ' + escapeHtml(holU) + '</span>' : '') + '</h3>';
+      if (holU) {
+        html += '<div class="empty-state">Feiertag – keine Buchungen möglich.</div>';
+      } else if (!dayBookings.length && !dayVacations.length) {
         html += '<div class="empty-state">Keine Einträge.</div>';
       } else {
         dayBookings.forEach(function (b) {
@@ -1616,57 +2048,6 @@
       }
       html += '</div>';
     });
-    return html;
-  }
-
-  function renderAuswertung() {
-    if (!state.profile || !state.profile.is_admin) {
-      return '<div class="card"><h3>Auswertungen</h3><div class="empty-state">Dieser Bereich ist nur für Administrator:innen sichtbar.</div></div>';
-    }
-
-    var html = '<div class="card"><h3>Buchungshäufigkeit je Raum</h3>';
-    html += '<div class="modal-sub">Anzahl und gebuchte Stunden je Raum in einem frei wählbaren Zeitraum (nach Datum der Buchung).</div>';
-    html += '<label for="freqFrom">Von</label><input type="date" id="freqFrom" value="' + escapeHtml(state.report.freqFrom || '') + '">';
-    html += '<label for="freqTo">Bis</label><input type="date" id="freqTo" value="' + escapeHtml(state.report.freqTo || '') + '">';
-    html += '<div style="height:10px"></div><button class="btn-primary" id="runFreqBtn"' + (state.report.freqLoading ? " disabled" : "") + '>' + (state.report.freqLoading ? "Lädt…" : "Auswerten") + '</button>';
-    if (state.report.freqRows) {
-      if (!state.report.freqRows.length) { html += '<div class="empty-state">Keine Buchungen im gewählten Zeitraum.</div>'; }
-      else {
-        state.report.freqRows.forEach(function (row) {
-          html += '<div class="admin-row"><span>' + escapeHtml(row.label) + '</span><span>' + row.count + ' Buchung(en) · ' + durationLabel(row.minutes) + '</span></div>';
-        });
-      }
-    }
-    html += '</div>';
-
-    html += '<div class="card"><h3>Buchungsprotokoll</h3>';
-    html += '<div class="modal-sub">Wer hat wann welche Buchung angelegt oder storniert – bleibt auch nach Stornierung erhalten.</div>';
-    html += '<label for="logFrom">Von</label><input type="date" id="logFrom" value="' + escapeHtml(state.report.logFrom || '') + '">';
-    html += '<label for="logTo">Bis</label><input type="date" id="logTo" value="' + escapeHtml(state.report.logTo || '') + '">';
-    html += '<div style="height:10px"></div><button class="btn-primary" id="runLogBtn"' + (state.report.logLoading ? " disabled" : "") + '>' + (state.report.logLoading ? "Lädt…" : "Protokoll laden") + '</button>';
-    if (state.report.logRows) {
-      if (!state.report.logRows.length) { html += '<div class="empty-state">Keine Einträge im gewählten Zeitraum.</div>'; }
-      else {
-        state.report.logRows.forEach(function (r) {
-          var dt = new Date(r.event_at);
-          var stamp = pad(dt.getDate()) + "." + pad(dt.getMonth() + 1) + "." + dt.getFullYear() + " " + pad(dt.getHours()) + ":" + pad(dt.getMinutes());
-          var actor = profileById(r.acted_by);
-          var owner = profileById(r.user_id);
-          var room = findRoomByNumber(r.room_number);
-          var ws = room ? room.workspaces.find(function (w) { return w.id === r.workspace_id; }) : null;
-          var actionLabel = r.action === "created" ? "Angelegt" : (r.action === "changed" ? "Geändert" : "Storniert");
-          // Gelöschte Konten erscheinen im Protokoll ohne Namen (Verweis wird beim Löschen entfernt)
-          var byWhom = escapeHtml(actor ? actor.full_name : "gelöschtes Konto");
-          if (owner && (!actor || owner.id !== actor.id)) byWhom += " (für " + escapeHtml(owner.full_name) + ")";
-          else if (actor && !owner) byWhom += " (für gelöschtes Konto)";
-          var bd = parseISO(r.booking_date);
-          html += '<div class="admin-row" style="align-items:flex-start"><span>' + stamp + '<br><span style="color:var(--text-muted)">' + actionLabel + ' von ' + byWhom + '</span></span>';
-          html += '<span style="text-align:right">' + (room ? escapeHtml(room.label) : r.room_number) + (ws ? ' · ' + escapeHtml(ws.label) : '') + '<br><span style="color:var(--text-muted)">' + DOW[bd.getDay()] + ', ' + bd.getDate() + '. ' + MONTHS[bd.getMonth()] + ' · ' + (r.action === "changed" && r.prev_start_time ? escapeHtml(fmtMin(toMin(r.prev_start_time)) + '–' + fmtMin(toMin(r.prev_end_time)) + ' → ') : '') + escapeHtml(bookingTimeLabel(r)) + '</span></span></div>';
-        });
-      }
-    }
-    html += '</div>';
-
     return html;
   }
 
@@ -1736,7 +2117,7 @@
     var reportsLink = document.getElementById("reportsLink");
     if (reportsLink) reportsLink.addEventListener("click", function () { state.tab = "auswertung"; render(); });
 
-    document.querySelectorAll(".date-chip").forEach(function (chip) {
+    document.querySelectorAll(".date-chip:not(.holiday)").forEach(function (chip) {
       chip.addEventListener("click", function () { state.selectedDate = chip.getAttribute("data-date"); render(); });
     });
     // Nach jedem Rendern (z. B. nach Klick auf einen Tag) den ausgewählten Tag im Tagesstreifen
@@ -1781,7 +2162,7 @@
     if (vacEndEl) vacEndEl.addEventListener("change", function () { state.vacForm.end = vacEndEl.value; render(); });
     document.querySelectorAll("[data-vcal-open]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        var which = btn.getAttribute("data-vcal-open"), vf = state.vacForm;
+        var which = btn.getAttribute("data-vcal-open"), vf = calForm(btn.getAttribute("data-vcal-form"));
         if (vf.open === which) { vf.open = null; render(); return; }
         vf.open = which;
         var base = (which === "end" ? (vf.end || vf.start) : vf.start) || fmtISO(new Date());
@@ -1791,20 +2172,23 @@
     });
     document.querySelectorAll("[data-vcal-nav]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        var ym = state.vacForm.calMonth.split("-");
+        var vf = calForm(btn.closest("[data-vcal-form]").getAttribute("data-vcal-form"));
+        var ym = vf.calMonth.split("-");
         var d = new Date(parseInt(ym[0], 10), parseInt(ym[1], 10) - 1 + parseInt(btn.getAttribute("data-vcal-nav"), 10), 1);
-        state.vacForm.calMonth = d.getFullYear() + "-" + pad(d.getMonth() + 1);
+        vf.calMonth = d.getFullYear() + "-" + pad(d.getMonth() + 1);
         render();
       });
     });
     document.querySelectorAll("[data-vcal-day]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        var iso = btn.getAttribute("data-vcal-day"), vf = state.vacForm;
+        var formKey = btn.closest("[data-vcal-form]").getAttribute("data-vcal-form"), vf = calForm(formKey);
+        var iso = btn.getAttribute("data-vcal-day");
         if (vf.open === "start") {
           vf.start = iso;
-          if (!vf.end || vf.end < iso) { vf.end = vf.end && vf.end >= iso ? vf.end : ""; vf.open = "end"; vf.calMonth = iso.slice(0, 7); }
+          if (!vf.end || vf.end < iso) { vf.end = ""; vf.open = "end"; vf.calMonth = iso.slice(0, 7); }
           else vf.open = null;
         } else { vf.end = iso; vf.open = null; }
+        if (formKey === "rep") vf.result = null;
         render();
       });
     });
@@ -1891,13 +2275,35 @@
       if (favBook) favBook.addEventListener("click", function () { var t = myFavorite(); openBookingModal(fw.room, fw.ws, state.selectedDate, null, { start: t.start, end: t.end }); });
       if (favOther) favOther.addEventListener("click", function () { openBookingModal(fw.room, fw.ws, state.selectedDate, null); });
     }
-    var runFreqBtn = document.getElementById("runFreqBtn");
-    if (runFreqBtn) runFreqBtn.addEventListener("click", function () {
-      runFrequencyReport(document.getElementById("freqFrom").value, document.getElementById("freqTo").value);
+    // Auswertungen
+    document.querySelectorAll("[data-repmode]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var rf = state.repForm; rf.mode = btn.getAttribute("data-repmode"); rf.result = null; rf.open = null;
+        if (rf.mode === "custom" && !rf.start) { var per0 = { from: fmtISO(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) }; rf.start = per0.from; rf.end = fmtISO(new Date()); }
+        render();
+      });
     });
-    var runLogBtn = document.getElementById("runLogBtn");
-    if (runLogBtn) runLogBtn.addEventListener("click", function () {
-      runBookingLog(document.getElementById("logFrom").value, document.getElementById("logTo").value);
+    document.querySelectorAll("[data-repshift]").forEach(function (btn) {
+      btn.addEventListener("click", function () { shiftReportAnchor(parseInt(btn.getAttribute("data-repshift"), 10)); render(); });
+    });
+    var repStart = document.getElementById("repStart"), repEnd = document.getElementById("repEnd");
+    if (repStart) repStart.addEventListener("change", function () { var rf = state.repForm; rf.start = repStart.value; if (rf.end && rf.end < rf.start) rf.end = ""; rf.result = null; render(); });
+    if (repEnd) repEnd.addEventListener("change", function () { state.repForm.end = repEnd.value; state.repForm.result = null; render(); });
+    var repGroup = document.getElementById("repGroup");
+    if (repGroup) repGroup.addEventListener("change", function () { state.repForm.group = repGroup.value; state.repForm.result = null; render(); });
+    var runUtilBtn = document.getElementById("runUtilBtn");
+    if (runUtilBtn) runUtilBtn.addEventListener("click", runUtilizationReport);
+    var utilPdfBtn = document.getElementById("utilPdfBtn");
+    if (utilPdfBtn) utilPdfBtn.addEventListener("click", exportUtilizationPdf);
+    var versPdfBtn = document.getElementById("versPdfBtn");
+    if (versPdfBtn) versPdfBtn.addEventListener("click", exportVersionsPdf);
+    // Feiertage (Systemverwaltung)
+    var addHolBtn = document.getElementById("addHolBtn");
+    if (addHolBtn) addHolBtn.addEventListener("click", function () {
+      addExtraHoliday(document.getElementById("newHolDate").value, document.getElementById("newHolName").value.trim());
+    });
+    document.querySelectorAll("[data-rmhol]").forEach(function (btn) {
+      btn.addEventListener("click", function () { removeExtraHoliday(btn.getAttribute("data-rmhol")); });
     });
 
     var backdrop = document.getElementById("modalBackdrop");
@@ -1934,7 +2340,7 @@
 
   function init() {
     state.dates = buildWorkdays(WORKDAY_COUNT);
-    state.selectedDate = fmtISO(state.dates[0]);
+    state.selectedDate = firstWorkdayISO(state.dates);
     render();
 
     // Gruppen werden bereits vor dem Login geladen, damit sie im Registrierungsformular auswählbar sind.
@@ -1959,7 +2365,7 @@
       var datesChanged = !state.dates.length || fmtISO(freshDates[0]) !== fmtISO(state.dates[0]);
       if (datesChanged) {
         state.dates = freshDates;
-        state.selectedDate = fmtISO(freshDates[0]);
+        state.selectedDate = firstWorkdayISO(freshDates);
       }
       if (state.session && state.profile) {
         loadBookings();
